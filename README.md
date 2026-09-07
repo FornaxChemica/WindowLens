@@ -45,7 +45,7 @@ Grant permissions in System Settings -> Privacy & Security.
 ## Build From Source
 
 ```bash
-git clone https://github.com/user/WindowLens.git
+git clone https://github.com/FornaxChemica/WindowLens.git
 cd WindowLens
 ./build-app.sh
 ```
