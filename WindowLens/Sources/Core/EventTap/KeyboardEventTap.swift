@@ -672,17 +672,18 @@ final class KeyboardEventTap {
                 onShortcutTriggered.send(.quitHoldCancelled)
                 return nil
             }
-            if keyCode == UInt16(kVK_ANSI_E) && isHoldingE,
+            if isHoldingE,
+               keyCode == cachedShortcuts.resourceMonitorToggle.keyCode,
                UserPreferences.load().modules.resourceMonitorEnabled {
                 let holdDuration = CFAbsoluteTimeGetCurrent() - eKeyDownTime
                 isHoldingE = false
                 if holdDuration < eHoldThreshold {
                     // Short tap → toggle resource monitor
-                    debugLog("E tapped (\(Int(holdDuration * 1000))ms), toggle monitor")
+                    debugLog("Monitor key tapped (\(Int(holdDuration * 1000))ms), toggle monitor")
                     onShortcutTriggered.send(.toggleResourceMonitor)
                 } else {
                     // Long hold → AI insight requested
-                    debugLog("E held (\(Int(holdDuration * 1000))ms), AI insight")
+                    debugLog("Monitor key held (\(Int(holdDuration * 1000))ms), AI insight")
                     onShortcutTriggered.send(.aiInsightRequested)
                 }
                 return nil

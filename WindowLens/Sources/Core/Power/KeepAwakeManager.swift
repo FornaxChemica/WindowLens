@@ -399,7 +399,9 @@ final class KeepAwakeManager: ObservableObject {
     // MARK: - Agents
 
     private func ensureWatchAgentsRunning() {
+        // Fresh scan picks up agents already mid-turn when this mode is enabled.
         agents.start()
+        agents.scanNow()
         agentPollTimer?.invalidate()
         let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in
