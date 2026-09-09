@@ -151,10 +151,6 @@ final class SwitcherPanelManager {
 
     func showNativeFallbackPreviewPanel() {
         guard AppState.shared.hasNativeSelection else { return }
-        guard AppState.shared.hasNativePlacementAnchor else {
-            hideVisibleNativePreviewPanels()
-            return
-        }
         showNativePanelOnTargetScreen()
     }
 
@@ -181,12 +177,11 @@ final class SwitcherPanelManager {
     }
 
     private func showNativePanelOnTargetScreen() {
-        guard AppState.shared.hasNativePlacementAnchor else {
-            hideVisibleNativePreviewPanels()
-            return
-        }
-        guard let targetScreen = nativePreviewScreen() else { return }
-        guard let targetPanel = ensurePanelExists(for: targetScreen) else { return }
+        let targetScreen = nativePreviewScreen()
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        guard let targetScreen,
+              let targetPanel = ensurePanelExists(for: targetScreen) else { return }
 
         for panel in panels.values where panel !== targetPanel {
             if panel.isVisible {

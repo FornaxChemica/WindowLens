@@ -15,6 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var windowSlotObserverTokens: [NSObjectProtocol] = []
     private var isNativeCommandTabSessionActive = false
     private var nativeFallbackWorkItem: DispatchWorkItem?
+    /// After Dock tears down AXProcessSwitcherList while Cmd is still held (Escape),
+    /// cancel our preview if the switcher never comes back.
+    private var nativeSwitcherGoneWorkItem: DispatchWorkItem?
+    private let nativeSwitcherGoneTimeoutSeconds: TimeInterval = 0.2
     private var nativeWindowSelectionWasAdjusted = false
     private var lastNativePreviewRefreshPID: pid_t?
     private var lastDockSelectionKey: String?
@@ -514,7 +518,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         dockProcessSwitcherObserver.onSwitcherDestroyed = { [weak self] in
             MainActor.assumeIsolated {
-                self?.endNativeCommandTabSession(applySelectedWindow: false)
+                guard let self else { return }
+                // Dock tears down/recreates AXProcessSwitcherList during hopping and on
+                // dismiss (Escape). Keep rediscovering while hopping; if the list never
+                // returns while Cmd is held, treat it as cancel (Escape).
+                if self.isNativeCommandTabSessionActive {
+                    let commandDown = NSEvent.modifierFlags.contains(.command)
+                    self.dockProcessSwitcherObserver.start()
+                    if commandDown {
+                        self.scheduleNativeSwitcherGoneCancelIfNeeded()
+                    }
+                    return
+                }
             }
         }
 
@@ -915,15 +930,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         case .nativeSwitchStarted(let reverse):
             startNativeCommandTabSession(reverse: reverse)
         case .nativeSwitchCycleNext:
-            scheduleProvisionalNativeFallback()
+            // Resync if Dock destroy / race ended AppDelegate session while tap still active.
+            if !isNativeCommandTabSessionActive {
+                startNativeCommandTabSession(reverse: false)
+            } else {
+                scheduleProvisionalNativeFallback()
+            }
         case .nativeSwitchCyclePrevious:
-            scheduleProvisionalNativeFallback()
+            if !isNativeCommandTabSessionActive {
+                startNativeCommandTabSession(reverse: true)
+            } else {
+                scheduleProvisionalNativeFallback()
+            }
         case .nativeSwitchWindowNext:
             selectNativeWindow(reverse: false)
         case .nativeSwitchWindowPrevious:
             selectNativeWindow(reverse: true)
         case .nativeSwitchEnded:
             endNativeCommandTabSession(applySelectedWindow: true)
+        case .nativeSwitchCancelled:
+            endNativeCommandTabSession(applySelectedWindow: false)
         case .windowHistoryUndo:
             performWindowHistoryUndo()
         case .windowHistoryRedo:
@@ -1200,11 +1226,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         lastDockSelectionKey = nil
         nativeFallbackWorkItem?.cancel()
         nativeFallbackWorkItem = nil
+        cancelNativeSwitcherGoneTimeout()
 
         dockProcessSwitcherObserver.start()
 
         let applications = WindowCache.shared.getApplicationsForNativePreview(forceRefresh: false)
-        panelManager.showNativePreview(applications: applications, showImmediately: false)
+        panelManager.showNativePreview(applications: applications, showImmediately: true)
         prewarmPreviews(for: applications)
         WindowCache.shared.prefetchAsync()
 
@@ -1222,6 +1249,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         nativeFallbackWorkItem?.cancel()
         nativeFallbackWorkItem = nil
+        cancelNativeSwitcherGoneTimeout()
 
         guard panelManager.selectNativeDockSelection(selection) else {
             return
@@ -1320,6 +1348,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    private func scheduleNativeSwitcherGoneCancelIfNeeded() {
+        cancelNativeSwitcherGoneTimeout()
+        let workItem = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.isNativeCommandTabSessionActive else { return }
+                // Switcher never reappeared — Escape (or Dock cancel) while Cmd held.
+                self.eventTap?.cancelNativeCommandTabSessionFromApp()
+                self.endNativeCommandTabSession(applySelectedWindow: false)
+            }
+        }
+        nativeSwitcherGoneWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + nativeSwitcherGoneTimeoutSeconds,
+            execute: workItem
+        )
+    }
+
+    private func cancelNativeSwitcherGoneTimeout() {
+        nativeSwitcherGoneWorkItem?.cancel()
+        nativeSwitcherGoneWorkItem = nil
+    }
+
     private func endNativeCommandTabSession(applySelectedWindow: Bool) {
         guard isNativeCommandTabSessionActive else { return }
 
@@ -1331,10 +1381,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         isNativeCommandTabSessionActive = false
         nativeFallbackWorkItem?.cancel()
         nativeFallbackWorkItem = nil
+        cancelNativeSwitcherGoneTimeout()
         nativeWindowSelectionWasAdjusted = false
         lastDockSelectionKey = nil
         dockProcessSwitcherObserver.stop()
-        reconcileNativeCommandTabRelease()
+        if applySelectedWindow {
+            reconcileNativeCommandTabRelease()
+        }
         panelManager.hide()
         eventTap?.setSwitcherVisible(false)
 

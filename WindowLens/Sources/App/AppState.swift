@@ -667,15 +667,14 @@ final class AppState: ObservableObject {
 
         if let anchorFrame, anchorFrame.width > 1, anchorFrame.height > 1 {
             nativeSelectedItemFrame = normalizedNativeAnchorFrame(anchorFrame)
-        } else {
-            nativeSelectedItemFrame = nil
         }
+        // Keep the previous item anchor when Dock AX briefly omits frames mid-hop.
+        // Clearing here forces hasNativePlacementAnchor=false and hides the preview panel.
 
         if let switcherFrame, switcherFrame.width > 1, switcherFrame.height > 1 {
             nativeSwitcherFrame = normalizedNativeAnchorFrame(switcherFrame)
-        } else {
-            nativeSwitcherFrame = nil
         }
+        // Same sticky behavior for the Dock switcher strip frame.
 
         let previousSelectedAppPID = selectedApp?.pid
         selectedAppIndex = index

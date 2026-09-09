@@ -39,6 +39,8 @@ enum ShortcutEvent {
     case nativeSwitchWindowNext
     case nativeSwitchWindowPrevious
     case nativeSwitchEnded
+    /// Cmd+Tab cancelled (Escape / Dock dismissed) — hide preview without activating selection.
+    case nativeSwitchCancelled
     case windowHistoryUndo
     case windowHistoryRedo
     case activateWindowSlot(Int)
@@ -72,6 +74,10 @@ final class KeyboardEventTap {
     private var searchModeActive = false  // When true, don't auto-confirm on modifier release
     private var searchingWithQuery = false
     private var nativeCommandTabSessionActive = false
+    private var pendingNativeSessionEndWorkItem: DispatchWorkItem?
+    // Fast Cmd+Tab re-presses often land ~100–250ms after release. Ending at 80ms
+    // blanked the preview before the next hop could cancel; keep the session warm.
+    private let nativeSessionEndDebounceSeconds: TimeInterval = 0.28
     private var callbackCount = 0
     private var hasLoggedFirstCallback = false
     private var hasLoggedMissingInputMonitoringForHealth = false
@@ -276,9 +282,16 @@ final class KeyboardEventTap {
         }
     }
 
+    /// AppDelegate cancelled the native session (Escape / Dock gone); keep tap state in sync.
+    func cancelNativeCommandTabSessionFromApp() {
+        cancelPendingNativeSessionEnd()
+        nativeCommandTabSessionActive = false
+    }
+
     func resetShortcutState(reason: String) {
         showSwitcherTimer?.cancel()
         showSwitcherTimer = nil
+        cancelPendingNativeSessionEnd()
         pendingActivation = false
         activeActivationShortcut = nil
         switcherVisible = false
@@ -496,6 +509,9 @@ final class KeyboardEventTap {
     ) {
         guard type == .keyDown, keyCode == activationKeyCode, flags.contains(.maskCommand) else { return }
 
+        // A Tab while Command is down cancels any deferred session-end (false release blips).
+        cancelPendingNativeSessionEnd()
+
         // Autorepeat Tabs still reach Dock (event is passed through), but WindowLens
         // must not schedule provisional cycles — selection tracks via Dock AX only.
         if isRepeat {
@@ -515,6 +531,31 @@ final class KeyboardEventTap {
             debugLog("Observed native Cmd+Tab session start")
             onShortcutTriggered.send(.nativeSwitchStarted(reverse: flags.contains(.maskShift)))
         }
+    }
+
+    private func cancelPendingNativeSessionEnd() {
+        pendingNativeSessionEndWorkItem?.cancel()
+        pendingNativeSessionEndWorkItem = nil
+    }
+
+    private func scheduleNativeSessionEndIfNeeded(callbackCountAtDetect: Int) {
+        cancelPendingNativeSessionEnd()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            // Live modifier check — ignore transient flagsChanged blips while Cmd is still held.
+            if NSEvent.modifierFlags.contains(.command) {
+                return
+            }
+            guard self.nativeCommandTabSessionActive else { return }
+            self.nativeCommandTabSessionActive = false
+            self.debugLog("Observed native Cmd+Tab session end")
+            self.onShortcutTriggered.send(.nativeSwitchEnded)
+        }
+        pendingNativeSessionEndWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + nativeSessionEndDebounceSeconds,
+            execute: workItem
+        )
     }
 
     private func debugLog(_ message: String) {
@@ -613,6 +654,19 @@ final class KeyboardEventTap {
                 resetShortcutState(reason: "clearing stale workspace state before Cmd+Tab pass-through")
             }
             observeSystemCommandTabEvent(type: type, keyCode: keyCode, flags: flags, isRepeat: isRepeat)
+            // Always pass Tab through (including autorepeat) so hold-Tab keeps cycling in Dock.
+            return Unmanaged.passUnretained(event)
+        }
+
+        // Escape cancels the system Cmd+Tab UI; keep our preview in sync.
+        if type == .keyDown,
+           keyCode == UInt16(kVK_Escape),
+           nativeCommandTabSessionActive || pendingNativeSessionEndWorkItem != nil {
+            cancelPendingNativeSessionEnd()
+            if nativeCommandTabSessionActive {
+                nativeCommandTabSessionActive = false
+                onShortcutTriggered.send(.nativeSwitchCancelled)
+            }
             return Unmanaged.passUnretained(event)
         }
 
@@ -625,10 +679,14 @@ final class KeyboardEventTap {
 
             if nativeCommandTabSessionActive,
                modifierTracker.wasModifierReleased(oldFlags: oldFlags, newFlags: flags, modifier: .command) {
-                nativeCommandTabSessionActive = false
-                debugLog("Observed native Cmd+Tab session end")
-                onShortcutTriggered.send(.nativeSwitchEnded)
+                scheduleNativeSessionEndIfNeeded(callbackCountAtDetect: callbackCount)
                 return Unmanaged.passUnretained(event)
+            }
+
+            // Command pressed again before debounced end fired.
+            if pendingNativeSessionEndWorkItem != nil,
+               flags.contains(.maskCommand) {
+                cancelPendingNativeSessionEnd()
             }
 
             // Check if the active activation shortcut was released

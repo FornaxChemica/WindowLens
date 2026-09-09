@@ -435,17 +435,24 @@ final class SwitcherPanel: NSPanel {
 
     private func nativeOriginForPanel(size panelSize: CGSize, on screen: NSScreen) -> CGPoint? {
         let appState = AppState.shared
-        guard appState.hasNativePlacementAnchor,
-              let selectedItemFrame = nativePlacementFrame(appState.nativeSelectedItemFrame, on: screen),
-              let switcherFrame = nativePlacementFrame(appState.nativeSwitcherFrame, on: screen) else {
-            return nil
+        if appState.hasNativePlacementAnchor,
+           let selectedItemFrame = nativePlacementFrame(appState.nativeSelectedItemFrame, on: screen),
+           let switcherFrame = nativePlacementFrame(appState.nativeSwitcherFrame, on: screen) {
+            return anchoredNativeOrigin(
+                panelSize: panelSize,
+                selectedItemFrame: selectedItemFrame,
+                switcherFrame: switcherFrame,
+                screen: screen
+            )
         }
 
-        return anchoredNativeOrigin(
-            panelSize: panelSize,
-            selectedItemFrame: selectedItemFrame,
-            switcherFrame: switcherFrame,
-            screen: screen
+        // Fallback while Dock AX frames are missing — never return nil (nil used to hide the panel).
+        let visibleFrame = screen.visibleFrame
+        let x = visibleFrame.midX - panelSize.width / 2
+        let y = visibleFrame.maxY - panelSize.height - 180
+        return CGPoint(
+            x: clamped(x, min: visibleFrame.minX + nativePlacementMargin, max: visibleFrame.maxX - panelSize.width - nativePlacementMargin),
+            y: clamped(y, min: visibleFrame.minY + nativePlacementMargin, max: visibleFrame.maxY - panelSize.height - nativePlacementMargin)
         )
     }
 
@@ -488,6 +495,12 @@ final class SwitcherPanel: NSPanel {
 
     private func hideNativePreviewForInvalidPlacementIfNeeded(mode: SwitcherPresentationMode) {
         guard mode == .nativePreview, isVisible else { return }
+
+        // Keep preview visible during an active native Cmd+Tab snapshot.
+        if AppState.shared.isNativeTraversalSnapshotActive {
+            recenterIfVisible()
+            return
+        }
 
         stopClickOutsideMonitor()
         alphaValue = 0
