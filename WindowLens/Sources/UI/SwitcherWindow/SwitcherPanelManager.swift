@@ -154,6 +154,12 @@ final class SwitcherPanelManager {
         showNativePanelOnTargetScreen()
     }
 
+    /// Show the native preview panel even before Dock AX has delivered a selection.
+    func showNativePreviewPanelPendingSelection() {
+        guard AppState.shared.presentationMode == .nativePreview else { return }
+        showNativePanelOnTargetScreen()
+    }
+
     func showNativeTraversalSnapshot(applications: [ApplicationModel], reverse: Bool) {
         AppState.shared.beginNativeTraversalSnapshot(applications, reverse: reverse)
         showNativePanelOnTargetScreen()

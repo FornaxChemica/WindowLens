@@ -283,13 +283,18 @@ struct StayAwakeControlsView: View {
                     icon: nil
                 )
             }
-            ForEach(agents.activeAgents.prefix(3)) { agent in
+            ForEach(agents.activeAgents.prefix(6)) { agent in
                 StayAwakeAgentCard(
                     title: agent.displayName,
                     subtitle: agent.statusHint,
                     elapsed: agent.elapsedDescription,
                     icon: agents.icon(for: agent)
                 )
+            }
+            if agents.activeAgents.count > 6 {
+                Text("+\(agents.activeAgents.count - 6) more agents")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
             }
         }
     }

@@ -58,26 +58,31 @@ final class WindowCache: @unchecked Sendable {
         return updateCache(with: freshApplications, preservingOrder: existingOrder)
     }
 
+    /// Snapshot for native Cmd-Tab. Never sync-enumerates when a cache exists —
+    /// cold AX on the main thread stalls the event tap and lets Dock advance multiple apps.
     func getApplicationsForNativePreview(forceRefresh: Bool = false) -> [ApplicationModel] {
-        if !forceRefresh {
-            lock.lock()
-            let cacheIsFresh = lastUpdate.map { Date().timeIntervalSince($0) < ttl } ?? false
-            let cachedApplications = cache
-            lock.unlock()
+        lock.lock()
+        let cachedApplications = cache
+        let cacheIsFresh = lastUpdate.map { Date().timeIntervalSince($0) < ttl } ?? false
+        lock.unlock()
 
-            if cacheIsFresh, !cachedApplications.isEmpty {
-                return cachedApplications.map(WindowEnumerator.normalizeFinderApplicationIfNeeded)
+        if !forceRefresh, !cachedApplications.isEmpty {
+            // Prefer stale cache over blocking the Cmd-Tab hot path after idle.
+            // Skip Finder AX normalize here — finderHasMainWindow stalls main during Tab.
+            if !cacheIsFresh {
+                prefetchAsync()
             }
+            return cachedApplications
         }
 
-        let existingOrder = getCachedApplications().map { $0.pid }
+        let existingOrder = cachedApplications.map { $0.pid }
         var applications = enumerateApplications(
             options: enumerationOptions(includeAllSpacesOverride: true)
         )
         attachResourceUsage(to: &applications)
         applications = applications.map(WindowEnumerator.normalizeFinderApplicationIfNeeded)
 
-        return mergeApplications(applications, preservingOrder: existingOrder)
+        return updateCache(with: applications, preservingOrder: existingOrder)
     }
 
     /// Match against a provided snapshot (session apps) without re-enumerating.

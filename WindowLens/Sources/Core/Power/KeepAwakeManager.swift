@@ -72,7 +72,15 @@ final class KeepAwakeManager: ObservableObject {
         if isPausedForHeat { return "Paused · hot" }
         if activeDuration == .whileAgentsActive {
             if agents.isAnyAgentActive {
-                return agents.activeAgents.first?.displayName ?? "AI working"
+                let busy = agents.activeAgents
+                switch busy.count {
+                case 0:
+                    return "AI working"
+                case 1:
+                    return busy[0].displayName
+                default:
+                    return "\(busy.count) agents"
+                }
             }
             return "Waiting for AI"
         }
@@ -469,10 +477,15 @@ final class KeepAwakeManager: ObservableObject {
             return
         }
         if activeDuration == .whileAgentsActive {
-            if let agent = agents.activeAgents.first {
-                countdownText = agent.elapsedDescription
-            } else {
+            let busy = agents.activeAgents
+            if busy.isEmpty {
                 countdownText = "…"
+            } else if busy.count == 1 {
+                countdownText = busy[0].elapsedDescription
+            } else if let oldest = busy.min(by: { $0.activeSince < $1.activeSince }) {
+                countdownText = "\(busy.count)·\(oldest.elapsedDescription)"
+            } else {
+                countdownText = "\(busy.count) agents"
             }
             return
         }

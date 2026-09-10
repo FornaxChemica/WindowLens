@@ -514,7 +514,8 @@ final class AppState: ObservableObject {
 
     /// Re-enumerate the selected app using workspace-style window discovery before native previews.
     /// Cmd+Tab keeps a frozen all-spaces snapshot; apps like Messages need live on-screen geometry/titles.
-    func refreshNativeWindowsForSelectedApp(forceRefresh: Bool = true) {
+    /// Default is cache-only — forcing a full sync enum on the Cmd-Tab path stalls the event tap.
+    func refreshNativeWindowsForSelectedApp(forceRefresh: Bool = false) {
         guard presentationMode == .nativePreview,
               let selectedPID = selectedApp?.pid,
               let appIndex = applications.firstIndex(where: { $0.pid == selectedPID }),

@@ -122,6 +122,8 @@ final class DockProcessSwitcherObserver: NSObject {
 
     @objc private func handleDiscoveryTimer(_ timer: Timer) {
         if installOnCurrentSwitcherList() {
+            discoveryTimer?.invalidate()
+            discoveryTimer = nil
             return
         }
 
@@ -225,20 +227,37 @@ final class DockProcessSwitcherObserver: NSObject {
     }
 
     private func selection(from element: AXUIElement, switcherFrame: CGRect?) -> DockProcessSwitcherSelection {
-        let title = directTitle(for: element) ?? bestTitle(for: element, remainingDepth: 2)
-        let bundleURL = urlAttribute(kAXURLAttribute, from: element) ?? bestURL(for: element, remainingDepth: 2)
+        // Prefer cheap attributes — deep AX walks on every flicker stall Tab key-up.
+        let title = directTitle(for: element)
+        let bundleURL = urlAttribute(kAXURLAttribute, from: element)
         let bundleIdentifier = bundleURL.flatMap { Bundle(url: $0)?.bundleIdentifier }
-        let pid = resolveRunningApplicationPID(
+        var pid = resolveRunningApplicationPID(
             title: title,
             bundleIdentifier: bundleIdentifier,
             bundleURL: bundleURL
         )
 
+        var resolvedTitle = title
+        var resolvedURL = bundleURL
+        var resolvedBundleID = bundleIdentifier
+
+        // Only deepen the AX walk when the cheap path can't resolve a running app.
+        if pid == nil {
+            resolvedTitle = title ?? bestTitle(for: element, remainingDepth: 2)
+            resolvedURL = bundleURL ?? bestURL(for: element, remainingDepth: 2)
+            resolvedBundleID = resolvedURL.flatMap { Bundle(url: $0)?.bundleIdentifier } ?? bundleIdentifier
+            pid = resolveRunningApplicationPID(
+                title: resolvedTitle,
+                bundleIdentifier: resolvedBundleID,
+                bundleURL: resolvedURL
+            )
+        }
+
         return DockProcessSwitcherSelection(
             pid: pid,
-            bundleIdentifier: bundleIdentifier,
-            title: title,
-            bundleURL: bundleURL,
+            bundleIdentifier: resolvedBundleID,
+            title: resolvedTitle,
+            bundleURL: resolvedURL,
             frame: frame(for: element),
             switcherFrame: switcherFrame
         )

@@ -65,6 +65,9 @@ final class KeyboardEventTap {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    /// Dedicated runloop so Tab key-up is never stuck behind main-thread AX/UI work.
+    private var tapThread: Thread?
+    private var tapRunLoop: CFRunLoop?
     private var healthTimer: Timer?
     private var healthTimerTarget: KeyboardEventTapHealthTarget?
     private var installRetryWorkItem: DispatchWorkItem?
@@ -268,10 +271,32 @@ final class KeyboardEventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
         if let source = runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+            let runLoop = tapRunLoop ?? CFRunLoopGetMain()
+            CFRunLoopRemoveSource(runLoop, source, .commonModes)
+            if let tapRunLoop {
+                CFRunLoopWakeUp(tapRunLoop)
+            }
         }
         eventTap = nil
         runLoopSource = nil
+    }
+
+    private func ensureTapThread() {
+        if tapRunLoop != nil { return }
+
+        let ready = DispatchSemaphore(value: 0)
+        let thread = Thread { [weak self] in
+            let runLoop = CFRunLoopGetCurrent()
+            self?.tapRunLoop = runLoop
+            ready.signal()
+            // Keep the thread alive for the lifetime of the process / tap manager.
+            CFRunLoopRun()
+        }
+        thread.name = "WindowLens.EventTap"
+        thread.qualityOfService = .userInteractive
+        tapThread = thread
+        thread.start()
+        ready.wait()
     }
 
     func setSwitcherVisible(_ visible: Bool) {
@@ -291,6 +316,7 @@ final class KeyboardEventTap {
         showSwitcherTimer?.cancel()
         showSwitcherTimer = nil
         cancelPendingNativeSessionEnd()
+        nativeCommandTabSessionActive = false
         pendingActivation = false
         activeActivationShortcut = nil
         switcherVisible = false
@@ -431,8 +457,17 @@ final class KeyboardEventTap {
         }
 
         runLoopSource = source
-        WLLog.eventTap.debug("RunLoop source created; adding to main run loop common modes")
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        ensureTapThread()
+        guard let tapRunLoop else {
+            WLLog.eventTap.fault("Event tap thread runloop unavailable")
+            eventTap = nil
+            runLoopSource = nil
+            return false
+        }
+
+        WLLog.eventTap.debug("RunLoop source created; adding to dedicated EventTap thread")
+        CFRunLoopAddSource(tapRunLoop, source, .commonModes)
+        CFRunLoopWakeUp(tapRunLoop)
         CGEvent.tapEnable(tap: tap, enable: true)
         WLLog.eventTap.debug("CGEventTap enabled=\(CGEvent.tapIsEnabled(tap: tap))")
         hasLoggedFirstCallback = false
@@ -647,7 +682,11 @@ final class KeyboardEventTap {
                 resetShortcutState(reason: "clearing stale workspace state before Cmd+Tab pass-through")
             }
             observeSystemCommandTabEvent(type: type, keyCode: keyCode, flags: flags, isRepeat: isRepeat)
-            // Always pass Tab through (including autorepeat) so hold-Tab keeps cycling in Dock.
+            // Swallow Tab autorepeat so Dock can't multi-advance from a delayed key-up
+            // that looks like a hold. Intentional cycling: tap Tab repeatedly while holding Cmd.
+            if type == .keyDown, isRepeat {
+                return nil
+            }
             return Unmanaged.passUnretained(event)
         }
 

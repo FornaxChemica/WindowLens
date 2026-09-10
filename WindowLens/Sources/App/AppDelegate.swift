@@ -22,6 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var nativeWindowSelectionWasAdjusted = false
     private var lastNativePreviewRefreshPID: pid_t?
     private var lastDockSelectionKey: String?
+    /// Coalesce rapid Dock AX selection flicker so we don't block Tab key-up on main.
+    private var pendingDockSelection: DockProcessSwitcherSelection?
+    private var dockSelectionSettleWorkItem: DispatchWorkItem?
+    private let dockSelectionSettleSeconds: TimeInterval = 0.06
     private var lastWorkspaceWindowIndexByPID: [pid_t: Int] = [:]
     private var hasStartedWindowCache = false
     private var onboardingWindow: NSWindow?
@@ -1228,21 +1232,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         nativeWindowSelectionWasAdjusted = false
         lastNativePreviewRefreshPID = nil
         lastDockSelectionKey = nil
+        pendingDockSelection = nil
+        dockSelectionSettleWorkItem?.cancel()
+        dockSelectionSettleWorkItem = nil
         nativeFallbackWorkItem?.cancel()
         nativeFallbackWorkItem = nil
         cancelNativeSwitcherGoneTimeout()
 
-        dockProcessSwitcherObserver.start()
-
+        // Cache-only snapshot — never sync-enumerate on this path.
         let applications = WindowCache.shared.getApplicationsForNativePreview(forceRefresh: false)
-        panelManager.showNativePreview(applications: applications, showImmediately: true)
-        prewarmPreviews(for: applications)
-        WindowCache.shared.prefetchAsync()
+        AppState.shared.beginNativePreviewSession(applications)
 
-        scheduleProvisionalNativeFallback(delay: 0.14)
+        // Defer AX + UI so Tab key-up can be delivered before any heavy work.
+        // Blocking main after Tab-down makes Dock treat Tab as held and multi-advance.
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.isNativeCommandTabSessionActive else { return }
+                self.dockProcessSwitcherObserver.start()
+                self.scheduleProvisionalNativeFallback(delay: 0.12)
+                WindowCache.shared.prefetchAsync()
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.isNativeCommandTabSessionActive else { return }
+                self.panelManager.showNativePreviewPanelPendingSelection()
+                self.prewarmPreviews(for: applications)
+            }
+        }
     }
 
     private func handleDockProcessSwitcherSelection(_ selection: DockProcessSwitcherSelection) {
+        guard isNativeCommandTabSessionActive else { return }
+
+        let selectionKey = "\(selection.pid.map(String.init) ?? "nil")|\(selection.bundleIdentifier ?? "")"
+        if selectionKey == lastDockSelectionKey, dockSelectionSettleWorkItem == nil {
+            return
+        }
+
+        pendingDockSelection = selection
+        dockSelectionSettleWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.isNativeCommandTabSessionActive else { return }
+                self.dockSelectionSettleWorkItem = nil
+                guard let pending = self.pendingDockSelection else { return }
+                self.pendingDockSelection = nil
+                self.applySettledDockSelection(pending)
+            }
+        }
+        dockSelectionSettleWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + dockSelectionSettleSeconds,
+            execute: workItem
+        )
+    }
+
+    private func applySettledDockSelection(_ selection: DockProcessSwitcherSelection) {
         guard isNativeCommandTabSessionActive else { return }
 
         let selectionKey = "\(selection.pid.map(String.init) ?? "nil")|\(selection.bundleIdentifier ?? "")"
@@ -1261,6 +1308,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         if let selectedApp = AppState.shared.selectedApp {
             requestSelectedNativeAppPreviews(selectedApp)
+        }
+    }
+
+    private func flushPendingDockSelectionIfNeeded() {
+        dockSelectionSettleWorkItem?.cancel()
+        dockSelectionSettleWorkItem = nil
+        if let pending = pendingDockSelection {
+            pendingDockSelection = nil
+            applySettledDockSelection(pending)
         }
     }
 
@@ -1307,7 +1363,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func requestSelectedNativeAppPreviews(_ app: ApplicationModel) {
         if lastNativePreviewRefreshPID != app.pid {
             lastNativePreviewRefreshPID = app.pid
-            AppState.shared.refreshNativeWindowsForSelectedApp()
+            // Never force a full sync enum here — that stalls the event tap mid Cmd-Tab.
+            AppState.shared.refreshNativeWindowsForSelectedApp(forceRefresh: false)
         }
         AppState.shared.hydrateCachedPreviews(for: app.pid)
 
@@ -1377,6 +1434,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func endNativeCommandTabSession(applySelectedWindow: Bool) {
         guard isNativeCommandTabSessionActive else { return }
 
+        // Apply the settled Dock highlight before tearing down (skip flicker intermediates).
+        flushPendingDockSelectionIfNeeded()
+
         let currentSelectedWindow = AppState.shared.selectedNativeWindowSelection()
         let shouldApplySelectedWindow = applySelectedWindow
             && (nativeWindowSelectionWasAdjusted || currentSelectedWindow?.window.isMinimized == true)
@@ -1385,6 +1445,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         isNativeCommandTabSessionActive = false
         nativeFallbackWorkItem?.cancel()
         nativeFallbackWorkItem = nil
+        dockSelectionSettleWorkItem?.cancel()
+        dockSelectionSettleWorkItem = nil
+        pendingDockSelection = nil
         cancelNativeSwitcherGoneTimeout()
         nativeWindowSelectionWasAdjusted = false
         lastDockSelectionKey = nil

@@ -108,6 +108,9 @@ final class AgentActivityWatcher: ObservableObject {
     private var lastSampleHadTranscriptBusy = false
     private var lastSampleHadHeuristicBusy = false
     private var wasTranscriptBusy = false
+    /// Require two idle transcript samples before treating Cursor turns as finished
+    /// (partial JSONL tails can briefly look idle mid-write).
+    private var consecutiveTranscriptIdleSamples = 0
 
     private init() {}
 
@@ -143,6 +146,7 @@ final class AgentActivityWatcher: ObservableObject {
         lastSampleHadTranscriptBusy = false
         lastSampleHadHeuristicBusy = false
         wasTranscriptBusy = false
+        consecutiveTranscriptIdleSamples = 0
     }
 
     func icon(for agent: ActiveAgent) -> NSImage? {
@@ -173,10 +177,11 @@ final class AgentActivityWatcher: ObservableObject {
         wasTranscriptBusy = lastSampleHadTranscriptBusy
 
         let inDebounce = workingUntil.map { Date() < $0 } ?? false
-        isAnyAgentActive = !busyHits.isEmpty || inDebounce
+        // Keep hold through one missed transcript sample so mid-write JSONL tails don't drop sleep.
+        isAnyAgentActive = !busyHits.isEmpty || inDebounce || lastSampleHadTranscriptBusy
 
         var display = busyHits
-        if display.isEmpty, inDebounce, !activeAgents.isEmpty {
+        if display.isEmpty, (inDebounce || lastSampleHadTranscriptBusy), !activeAgents.isEmpty {
             display = activeAgents.map { previous in
                 ActiveAgent(
                     id: previous.id,
@@ -227,30 +232,44 @@ final class AgentActivityWatcher: ObservableObject {
             }) else { continue }
 
             let treeCPU = treeCPU(for: host, appPID: app.processIdentifier, processes: processSnapshot)
-            let transcript = host.bundleID == "com.todesktop.230313mzl4w4u92"
-                ? Self.probeCursorTranscriptActivity()
-                : nil
+            let openTurns = host.bundleID == "com.todesktop.230313mzl4w4u92"
+                ? Self.probeAllCursorOpenTurns()
+                : []
             let uiStatus = host.readsUIStatus
                 ? cachedUIStatus(for: host.bundleID, pid: app.processIdentifier)
                 : nil
             let busyFromCPU = treeCPU >= host.treeBusyThreshold
             let busyFromUI = uiStatus.map { Self.uiStatusImpliesBusy($0) } ?? false
-            let busyFromTranscript = transcript != nil
-            let busy = busyFromCPU || busyFromUI || busyFromTranscript
+            let busyFromTranscript = !openTurns.isEmpty
 
             if busyFromTranscript { transcriptBusy = true }
             if busyFromCPU || busyFromUI { heuristicBusy = true }
 
-            // Only surface hosts that actually look like an agent is working.
+            if !openTurns.isEmpty {
+                // One card per in-progress Cursor chat / subagent turn.
+                for turn in openTurns {
+                    agents.append(
+                        ActiveAgent(
+                            id: turn.id,
+                            displayName: turn.displayName,
+                            bundleIdentifier: host.bundleID,
+                            statusHint: turn.statusHint,
+                            activeSince: turn.activeSince,
+                            pid: app.processIdentifier,
+                            isBusy: true
+                        )
+                    )
+                }
+                continue
+            }
+
+            let busy = busyFromCPU || busyFromUI
             guard busy else { continue }
 
             let label = app.localizedName ?? host.bundleID
-            // Prefer live UI stage labels, then transcript stage, then CPU.
             let hint: String
             if let uiStatus, Self.uiStatusImpliesBusy(uiStatus) {
                 hint = uiStatus
-            } else if let transcript {
-                hint = transcript.statusHint
             } else {
                 hint = statusHint(forCPU: treeCPU, kind: .ide)
             }
@@ -261,7 +280,7 @@ final class AgentActivityWatcher: ObservableObject {
                     displayName: label,
                     bundleIdentifier: host.bundleID,
                     statusHint: hint,
-                    activeSince: transcript?.activeSince ?? Date(),
+                    activeSince: Date(),
                     pid: app.processIdentifier,
                     isBusy: true
                 )
@@ -275,7 +294,7 @@ final class AgentActivityWatcher: ObservableObject {
             heuristicBusy = true
             agents.append(
                 ActiveAgent(
-                    id: "cli:\(entry.baseName)",
+                    id: "cli:\(entry.baseName):\(entry.pid)",
                     displayName: Self.prettyCLIName(entry.baseName),
                     bundleIdentifier: Self.bundleHint(forCLI: entry.baseName),
                     statusHint: statusHint(forCPU: cpu, kind: .cli),
@@ -286,13 +305,21 @@ final class AgentActivityWatcher: ObservableObject {
             )
         }
 
-        lastSampleHadTranscriptBusy = transcriptBusy
+        if transcriptBusy {
+            consecutiveTranscriptIdleSamples = 0
+            lastSampleHadTranscriptBusy = true
+        } else {
+            consecutiveTranscriptIdleSamples += 1
+            // Hold transcript-busy for one extra tick after the last open turn disappears.
+            lastSampleHadTranscriptBusy = consecutiveTranscriptIdleSamples < 2 && wasTranscriptBusy
+        }
         lastSampleHadHeuristicBusy = heuristicBusy
 
         var seen = Set<String>()
         return agents.filter { seen.insert($0.id).inserted }
             .sorted {
                 if $0.isBusy != $1.isBusy { return $0.isBusy && !$1.isBusy }
+                if $0.activeSince != $1.activeSince { return $0.activeSince < $1.activeSince }
                 return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
             }
     }
@@ -323,18 +350,22 @@ final class AgentActivityWatcher: ObservableObject {
     // Open agent-transcript jsonl files (no trailing turn_ended) are a reliable busy signal.
 
     private struct CursorTranscriptHit {
+        let id: String
+        let displayName: String
         let statusHint: String
         let activeSince: Date
+        let mtime: Date
     }
 
-    private static func probeCursorTranscriptActivity() -> CursorTranscriptHit? {
+    /// Every in-progress Cursor chat / subagent turn under ~/.cursor/projects.
+    private static func probeAllCursorOpenTurns() -> [CursorTranscriptHit] {
         let projectsRoot = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".cursor/projects", isDirectory: true)
-        guard FileManager.default.fileExists(atPath: projectsRoot.path) else { return nil }
+        guard FileManager.default.fileExists(atPath: projectsRoot.path) else { return [] }
 
         let maxAge: TimeInterval = 3 * 60 * 60 // ignore stale abandoned turns
         let cutoff = Date().addingTimeInterval(-maxAge)
-        var best: (url: URL, mtime: Date, hint: String, started: Date)?
+        var hits: [CursorTranscriptHit] = []
 
         let projectDirs = (try? FileManager.default.contentsOfDirectory(
             at: projectsRoot,
@@ -352,6 +383,8 @@ final class AgentActivityWatcher: ObservableObject {
                 options: [.skipsHiddenFiles]
             ) else { continue }
 
+            let projectLabel = friendlyProjectLabel(from: projectDir.lastPathComponent)
+
             while let item = enumerator.nextObject() as? URL {
                 guard item.pathExtension == "jsonl" else { continue }
 
@@ -363,16 +396,64 @@ final class AgentActivityWatcher: ObservableObject {
                       mtime >= cutoff,
                       (values?.fileSize ?? 0) > 0 else { continue }
 
-                // Skip older candidates early.
-                if let current = best, mtime <= current.mtime { continue }
-
                 guard let openTurn = readOpenTurn(from: item) else { continue }
-                best = (item, mtime, openTurn.hint, openTurn.startedAt)
+
+                let isSubagent = item.path.contains("/subagents/")
+                let shortID = String(item.deletingPathExtension().lastPathComponent.prefix(8))
+                let displayName: String
+                if isSubagent {
+                    displayName = "Cursor subagent · \(shortID)"
+                } else if projectLabel.isEmpty {
+                    displayName = "Cursor · \(shortID)"
+                } else {
+                    displayName = "Cursor · \(projectLabel)"
+                }
+
+                // Stable id from path so concurrent chats don't collapse together.
+                let relative = item.path.replacingOccurrences(of: projectsRoot.path + "/", with: "")
+                hits.append(
+                    CursorTranscriptHit(
+                        id: "cursor-turn:\(relative)",
+                        displayName: displayName,
+                        statusHint: openTurn.hint,
+                        activeSince: openTurn.startedAt,
+                        mtime: mtime
+                    )
+                )
             }
         }
 
-        guard let best else { return nil }
-        return CursorTranscriptHit(statusHint: best.hint, activeSince: best.started)
+        // Disambiguate multiple chats that share a display name (same project / subagent label).
+        var indicesByName: [String: [Int]] = [:]
+        for (index, hit) in hits.enumerated() {
+            indicesByName[hit.displayName, default: []].append(index)
+        }
+        for (_, indices) in indicesByName where indices.count > 1 {
+            for index in indices {
+                let hit = hits[index]
+                let uuidPart = hit.id.split(separator: "/").last?
+                    .replacingOccurrences(of: ".jsonl", with: "")
+                    .prefix(8) ?? "agent"
+                hits[index] = CursorTranscriptHit(
+                    id: hit.id,
+                    displayName: "\(hit.displayName) · \(uuidPart)",
+                    statusHint: hit.statusHint,
+                    activeSince: hit.activeSince,
+                    mtime: hit.mtime
+                )
+            }
+        }
+
+        return hits.sorted { $0.mtime > $1.mtime }
+    }
+
+    private static func friendlyProjectLabel(from folderName: String) -> String {
+        // "Users-chakshu-Code-WindowLens" → "WindowLens"
+        let parts = folderName.split(separator: "-")
+        if let last = parts.last, last.count >= 2 {
+            return String(last)
+        }
+        return folderName
     }
 
     private struct OpenTurn {
@@ -380,16 +461,27 @@ final class AgentActivityWatcher: ObservableObject {
         let startedAt: Date
     }
 
-    /// Returns stage + start time for an in-progress turn (last line is not turn_ended).
+    /// Returns stage + start time for an in-progress turn (last *parsed* line is not turn_ended).
     private static func readOpenTurn(from url: URL) -> OpenTurn? {
         guard let text = readTailText(of: url, maxBytes: 48_000) else { return nil }
         let lines = text
             .split(whereSeparator: \.isNewline)
             .map(String.init)
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        guard let lastLine = lines.last,
-              let lastPayload = decodeJSONObject(lastLine),
-              (lastPayload["type"] as? String) != "turn_ended" else {
+
+        // Use the last successfully decoded JSON line — a partial trailing write must not
+        // make an open turn look finished.
+        var lastPayload: [String: Any]?
+        var lastPayloadIndex: Int?
+        for (idx, line) in lines.enumerated().reversed() {
+            if let payload = decodeJSONObject(line) {
+                lastPayload = payload
+                lastPayloadIndex = idx
+                break
+            }
+        }
+        guard let lastPayload, let lastPayloadIndex else { return nil }
+        if (lastPayload["type"] as? String) == "turn_ended" {
             return nil
         }
 
@@ -397,8 +489,8 @@ final class AgentActivityWatcher: ObservableObject {
 
         // Walk back to the start of this open turn (first event after prior turn_ended).
         var turnStartIndex = 0
-        for (idx, line) in lines.enumerated().reversed() {
-            guard let payload = decodeJSONObject(line) else { continue }
+        for idx in stride(from: lastPayloadIndex, through: 0, by: -1) {
+            guard let payload = decodeJSONObject(lines[idx]) else { continue }
             if (payload["type"] as? String) == "turn_ended" {
                 turnStartIndex = idx + 1
                 break
