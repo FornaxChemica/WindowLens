@@ -318,13 +318,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         if !hasCompletedPermissionGate {
-<<<<<<< HEAD
-            WLLog.permissions.debug("Permission gate completed context=\(context)")
-=======
             WLLog.permissions.debug(
                 "Permission gate completed (core) context=\(context) screen=\(status.screenRecording)"
             )
->>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
         }
         hasCompletedPermissionGate = true
         closePermissionOnboardingWindow()

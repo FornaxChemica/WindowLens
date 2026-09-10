@@ -65,12 +65,7 @@ final class KeyboardEventTap {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-<<<<<<< HEAD
-    /// Dedicated runloop so Tab key-up is never stuck behind main-thread AX/UI work.
-    private var tapThread: Thread?
-=======
     /// Runloop the tap source is registered on (main — dedicated thread delivered 0 callbacks).
->>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
     private var tapRunLoop: CFRunLoop?
     private var healthTimer: Timer?
     private var healthTimerTarget: KeyboardEventTapHealthTarget?
@@ -135,13 +130,9 @@ final class KeyboardEventTap {
     private var cachedModules = UserPreferences.ModuleSettings()
 
     init() {
-<<<<<<< HEAD
-        cachedShortcuts = UserPreferences.load().shortcuts
-=======
         let prefs = UserPreferences.load()
         cachedShortcuts = prefs.shortcuts
         cachedModules = prefs.modules
->>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
         WLLog.eventTap.debug("init")
         logStartupDiagnostics(context: "init")
         startHealthMonitoring()
@@ -283,37 +274,11 @@ final class KeyboardEventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
         if let source = runLoopSource {
-<<<<<<< HEAD
-            let runLoop = tapRunLoop ?? CFRunLoopGetMain()
-            CFRunLoopRemoveSource(runLoop, source, .commonModes)
-            if let tapRunLoop {
-                CFRunLoopWakeUp(tapRunLoop)
-            }
-=======
             // Tap is always on the main runloop (dedicated-thread delivery was dead — 0 callbacks).
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
->>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
         }
         eventTap = nil
         runLoopSource = nil
-    }
-
-    private func ensureTapThread() {
-        if tapRunLoop != nil { return }
-
-        let ready = DispatchSemaphore(value: 0)
-        let thread = Thread { [weak self] in
-            let runLoop = CFRunLoopGetCurrent()
-            self?.tapRunLoop = runLoop
-            ready.signal()
-            // Keep the thread alive for the lifetime of the process / tap manager.
-            CFRunLoopRun()
-        }
-        thread.name = "WindowLens.EventTap"
-        thread.qualityOfService = .userInteractive
-        tapThread = thread
-        thread.start()
-        ready.wait()
     }
 
     func setSwitcherVisible(_ visible: Bool) {
@@ -475,19 +440,6 @@ final class KeyboardEventTap {
         }
 
         runLoopSource = source
-<<<<<<< HEAD
-        ensureTapThread()
-        guard let tapRunLoop else {
-            WLLog.eventTap.fault("Event tap thread runloop unavailable")
-            eventTap = nil
-            runLoopSource = nil
-            return false
-        }
-
-        WLLog.eventTap.debug("RunLoop source created; adding to dedicated EventTap thread")
-        CFRunLoopAddSource(tapRunLoop, source, .commonModes)
-        CFRunLoopWakeUp(tapRunLoop)
-=======
         // Attach to the main runloop. A dedicated EventTap thread could report
         // "installed"/enabled while delivering zero callbacks; the system then
         // times the tap out and stalls Cmd-Tab / typing.
@@ -495,7 +447,6 @@ final class KeyboardEventTap {
         tapRunLoop = mainLoop
         WLLog.eventTap.debug("RunLoop source created; adding to main runloop")
         CFRunLoopAddSource(mainLoop, source, .commonModes)
->>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
         CGEvent.tapEnable(tap: tap, enable: true)
         WLLog.eventTap.debug("CGEventTap enabled=\(CGEvent.tapIsEnabled(tap: tap))")
         hasLoggedFirstCallback = false
@@ -621,25 +572,6 @@ final class KeyboardEventTap {
         )
     }
 
-<<<<<<< HEAD
-    private func logKeyboardEvent(type: CGEventType, keyCode: UInt16, flags: CGEventFlags, isRepeat: Bool) {
-        let typeName: String
-        switch type {
-        case .keyDown:
-            typeName = "keyDown"
-        case .keyUp:
-            typeName = "keyUp"
-        case .flagsChanged:
-            typeName = "flagsChanged"
-        default:
-            typeName = "event(\(type.rawValue))"
-        }
-
-        WLLog.eventTap.debug("Received key event \(typeName, privacy: .public) key=\(self.keyName(for: keyCode), privacy: .public) code=\(keyCode) flags=\(self.modifierDescription(from: flags), privacy: .public) tracker=\(self.modifierDescription(from: self.modifierTracker.currentModifierSet()), privacy: .public) repeat=\(isRepeat)")
-    }
-
-=======
->>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
     private func keyName(for keyCode: UInt16) -> String {
         switch Int(keyCode) {
         case kVK_Tab:
@@ -717,16 +649,8 @@ final class KeyboardEventTap {
                 searchModeActive = false
             }
             observeSystemCommandTabEvent(type: type, keyCode: keyCode, flags: flags, isRepeat: isRepeat)
-<<<<<<< HEAD
-            // Swallow Tab autorepeat so Dock can't multi-advance from a delayed key-up
-            // that looks like a hold. Intentional cycling: tap Tab repeatedly while holding Cmd.
-            if type == .keyDown, isRepeat {
-                return nil
-            }
-=======
             // Pass Tab (including autorepeat) through to Dock so Cmd+Tab hold-to-cycle works.
             // WindowLens ignores repeats in observeSystemCommandTabEvent and tracks via Dock AX.
->>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
             return Unmanaged.passUnretained(event)
         }
 

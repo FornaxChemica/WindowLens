@@ -66,35 +66,17 @@ final class WindowCache: @unchecked Sendable {
         let cacheIsFresh = lastUpdate.map { Date().timeIntervalSince($0) < ttl } ?? false
         lock.unlock()
 
-<<<<<<< HEAD
-        if !forceRefresh, !cachedApplications.isEmpty {
-            // Prefer stale cache over blocking the Cmd-Tab hot path after idle.
-            // Skip Finder AX normalize here — finderHasMainWindow stalls main during Tab.
-            if !cacheIsFresh {
-=======
         // Never sync-enumerate on this path — cold AX on main stalls Tab key-up and
         // lets Dock multi-advance through every app.
         if !cachedApplications.isEmpty {
             if forceRefresh || !cacheIsFresh {
->>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
                 prefetchAsync()
             }
             return cachedApplications
         }
 
-<<<<<<< HEAD
-        let existingOrder = cachedApplications.map { $0.pid }
-        var applications = enumerateApplications(
-            options: enumerationOptions(includeAllSpacesOverride: true)
-        )
-        attachResourceUsage(to: &applications)
-        applications = applications.map(WindowEnumerator.normalizeFinderApplicationIfNeeded)
-
-        return updateCache(with: applications, preservingOrder: existingOrder)
-=======
         prefetchAsync()
         return []
->>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
     }
 
     /// Match against a provided snapshot (session apps) without re-enumerating.
