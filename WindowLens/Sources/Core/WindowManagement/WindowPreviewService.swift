@@ -45,7 +45,6 @@ final class WindowPreviewService: @unchecked Sendable {
     private let previewImageStore = PreviewImageStore()
     private let captureLimiter = CaptureLimiter(limit: 2)
 
-    private let isPreviewDebugLoggingEnabled = false
     private let freshCaptureThrottleInterval: TimeInterval = 1.2
     private let diskCleanupStoreInterval = 25
     private let diskCleanupTimeInterval: TimeInterval = 10 * 60
@@ -84,7 +83,7 @@ final class WindowPreviewService: @unchecked Sendable {
         lastSuccessfulCaptureDatesByKey.removeAll(keepingCapacity: false)
         lock.unlock()
 
-        print("[WindowPreviewService] Volatile preview memory trimmed: \(reason)")
+        WLLog.preview.debug("Volatile preview memory trimmed: \(reason)")
     }
 
     func cachedPreview(
@@ -101,7 +100,7 @@ final class WindowPreviewService: @unchecked Sendable {
 
         for key in strongKeys {
             if let image = cache.object(forKey: key as NSString) {
-                log("memory cache hit key=\(key)")
+                WLLog.preview.debug("memory cache hit key=\(key)")
                 return image
             }
         }
@@ -109,14 +108,14 @@ final class WindowPreviewService: @unchecked Sendable {
         if strongKeys.isEmpty {
             for key in weakKeys {
                 if let image = cache.object(forKey: key as NSString) {
-                    log("memory cache hit key=\(key)")
+                    WLLog.preview.debug("memory cache hit key=\(key)")
                     return image
                 }
             }
         }
 
         if let image = previewImageStore.image(for: identity) {
-            log("disk cache hit key=\(identity.stableKey)")
+            WLLog.preview.debug("disk cache hit key=\(identity.stableKey)")
             if storeDiskResultInMemory {
                 storeInMemory(image, for: identity)
             }
@@ -190,7 +189,7 @@ final class WindowPreviewService: @unchecked Sendable {
         for window in windows {
             guard !window.isWindowlessPlaceholder else { continue }
             if WindowEnumerator.shouldSuppressFinderPreview(for: window) {
-                log("skip Finder restore preview id=\(window.windowID) title=\(window.title)")
+                WLLog.preview.debug("skip Finder restore preview id=\(window.windowID) title=\(window.title)")
                 continue
             }
 
@@ -201,7 +200,7 @@ final class WindowPreviewService: @unchecked Sendable {
             let volatileMemoryGeneration = currentVolatileMemoryGeneration()
 
             if let cachedImage = cachedPreview(for: identity) {
-                log("posting cached preview id=\(windowID) title=\(window.title)")
+                WLLog.preview.debug("posting cached preview id=\(windowID) title=\(window.title)")
                 postPreview(cachedImage, for: PreviewRequest(
                     windowID: windowID,
                     ownerPID: resolvedOwnerPID,
@@ -219,20 +218,20 @@ final class WindowPreviewService: @unchecked Sendable {
                 }
 
                 if isFreshCaptureThrottled(inFlightKey) {
-                    log("skip fresh capture throttle id=\(windowID) title=\(window.title)")
+                    WLLog.preview.debug("skip fresh capture throttle id=\(windowID) title=\(window.title)")
                     continue
                 }
             }
 
             if window.previewImage != nil {
-                log("recapturing existing preview without keyed cache id=\(windowID) pid=\(ownerPID.map(String.init) ?? "unknown") title=\(window.title)")
+                WLLog.preview.debug("recapturing existing preview without keyed cache id=\(windowID) pid=\(ownerPID.map(String.init) ?? "unknown") title=\(window.title)")
             }
 
-            log("cache miss id=\(windowID) pid=\(ownerPID.map(String.init) ?? "unknown") app=\(appName ?? "unknown") title=\(window.title) capture=\(window.canCapturePreview) bounds=\(Self.describe(window.bounds))")
+            WLLog.preview.debug("cache miss id=\(windowID) pid=\(ownerPID.map(String.init) ?? "unknown") app=\(appName ?? "unknown") title=\(window.title) capture=\(window.canCapturePreview) bounds=\(Self.describe(window.bounds))")
 
             guard window.canCapturePreview else { continue }
             guard markInFlight(inFlightKey) else {
-                log("skip in-flight id=\(windowID) title=\(window.title) generation=\(selectionGeneration.map(String.init) ?? "none")")
+                WLLog.preview.debug("skip in-flight id=\(windowID) title=\(window.title) generation=\(selectionGeneration.map(String.init) ?? "none")")
                 continue
             }
 
@@ -251,7 +250,7 @@ final class WindowPreviewService: @unchecked Sendable {
 
         guard !requests.isEmpty else { return }
 
-        log("queued \(requests.count) preview request(s): \(requests.map { String($0.windowID) }.joined(separator: ","))")
+        WLLog.preview.debug("queued \(requests.count) preview request(s): \(requests.map { String($0.windowID) }.joined(separator: ","))")
         let priority: TaskPriority = selectionGeneration == nil ? .utility : .userInitiated
         Task.detached(priority: priority) {
             await self.captureLimiter.acquire()
@@ -265,7 +264,7 @@ final class WindowPreviewService: @unchecked Sendable {
             for request in requests {
                 clearInFlight(request.inFlightKey)
             }
-            log("Screen Recording permission is required for window previews")
+            WLLog.preview.debug("Screen Recording permission is required for window previews")
             return
         }
 
@@ -275,7 +274,7 @@ final class WindowPreviewService: @unchecked Sendable {
                 onScreenWindowsOnly: false
             )
             let windowsByID = Dictionary(content.windows.map { ($0.windowID, $0) }, uniquingKeysWith: { first, _ in first })
-            log("ScreenCaptureKit returned \(content.windows.count) window(s), \(content.displays.count) display(s), \(content.applications.count) app(s)")
+            WLLog.preview.debug("ScreenCaptureKit returned \(content.windows.count) window(s), \(content.displays.count) display(s), \(content.applications.count) app(s)")
 
             var assignedSCWindowIDs = Set<CGWindowID>()
 
@@ -288,13 +287,13 @@ final class WindowPreviewService: @unchecked Sendable {
                     allWindows: content.windows,
                     assignedSCWindowIDs: assignedSCWindowIDs
                 ) else {
-                    log("no SCWindow match for AX id=\(request.windowID) pid=\(request.ownerPID.map(String.init) ?? "unknown") app=\(request.appName ?? "unknown") title=\(request.title) bounds=\(Self.describe(request.bounds)); candidates=\(candidateSummary(for: request, in: content.windows))")
+                    WLLog.preview.debug("no SCWindow match for AX id=\(request.windowID) pid=\(request.ownerPID.map(String.init) ?? "unknown") app=\(request.appName ?? "unknown") title=\(request.title) bounds=\(Self.describe(request.bounds)); candidates=\(self.candidateSummary(for: request, in: content.windows))")
                     continue
                 }
 
                 do {
                     guard let image = try await Self.captureWindowImage(window, sourceSize: request.sourceSize) else {
-                        log("capture returned no image for AX id=\(request.windowID) matchedSC id=\(window.windowID) title=\(window.title ?? "untitled")")
+                        WLLog.preview.debug("capture returned no image for AX id=\(request.windowID) matchedSC id=\(window.windowID) title=\(window.title ?? "untitled")")
                         continue
                     }
 
@@ -309,15 +308,15 @@ final class WindowPreviewService: @unchecked Sendable {
                         cachedQuality: cachedQuality,
                         appName: request.appName
                     ) {
-                        log("rejected preview AX id=\(request.windowID) SC id=\(window.windowID) reason=\(rejectionReason) metrics=\(quality.debugSummary) title=\(request.title)")
+                        WLLog.preview.debug("rejected preview AX id=\(request.windowID) SC id=\(window.windowID) reason=\(rejectionReason) metrics=\(quality.debugSummary) title=\(request.title)")
                         if let cachedImage {
-                            log("posting cached preview after rejected capture id=\(request.windowID) title=\(request.title) cachedMetrics=\(cachedQuality?.debugSummary ?? "unknown")")
+                            WLLog.preview.debug("posting cached preview after rejected capture id=\(request.windowID) title=\(request.title) cachedMetrics=\(cachedQuality?.debugSummary ?? "unknown")")
                             postPreview(cachedImage, for: request)
                         }
                         continue
                     }
 
-                    log("captured preview AX id=\(request.windowID) SC id=\(window.windowID) image=\(Int(image.size.width))x\(Int(image.size.height)) metrics=\(quality.debugSummary) title=\(request.title)")
+                    WLLog.preview.debug("captured preview AX id=\(request.windowID) SC id=\(window.windowID) image=\(Int(image.size.width))x\(Int(image.size.height)) metrics=\(quality.debugSummary) title=\(request.title)")
                     storePreview(
                         image,
                         for: request.previewIdentity,
@@ -327,14 +326,14 @@ final class WindowPreviewService: @unchecked Sendable {
                     assignedSCWindowIDs.insert(window.windowID)
                     postPreview(image, for: request)
                 } catch {
-                    log("capture failed AX id=\(request.windowID) matchedSC id=\(window.windowID) title=\(request.title): \(error)")
+                    WLLog.preview.debug("capture failed AX id=\(request.windowID) matchedSC id=\(window.windowID) title=\(request.title): \(error)")
                 }
             }
         } catch {
             for request in requests {
                 clearInFlight(request.inFlightKey)
             }
-            log("failed to fetch shareable content: \(error)")
+            WLLog.preview.debug("failed to fetch shareable content: \(error)")
         }
     }
 
@@ -350,14 +349,14 @@ final class WindowPreviewService: @unchecked Sendable {
             let directPID = directMatch.owningApplication?.processID
             if request.ownerPID == nil || directPID == request.ownerPID {
                 if Self.titleMatches(window: directMatch, request: request) {
-                    log("matched by CGWindowID AX id=\(request.windowID) SC id=\(directMatch.windowID) pid=\(directPID.map(String.init) ?? "unknown") title=\(directMatch.title ?? "untitled")")
+                    WLLog.preview.debug("matched by CGWindowID AX id=\(request.windowID) SC id=\(directMatch.windowID) pid=\(directPID.map(String.init) ?? "unknown") title=\(directMatch.title ?? "untitled")")
                 } else {
-                    log("matched by CGWindowID despite title mismatch AX id=\(request.windowID) SC id=\(directMatch.windowID) requestedTitle=\(request.title) scTitle=\(directMatch.title ?? "untitled") requestedBounds=\(Self.describe(request.bounds)) scFrame=\(Self.describe(directMatch.frame))")
+                    WLLog.preview.debug("matched by CGWindowID despite title mismatch AX id=\(request.windowID) SC id=\(directMatch.windowID) requestedTitle=\(request.title) scTitle=\(directMatch.title ?? "untitled") requestedBounds=\(Self.describe(request.bounds)) scFrame=\(Self.describe(directMatch.frame))")
                 }
                 return directMatch
             }
 
-            log("ignored CGWindowID match with wrong pid AX id=\(request.windowID) requestedPID=\(request.ownerPID.map(String.init) ?? "unknown") scPID=\(directPID.map(String.init) ?? "unknown") title=\(directMatch.title ?? "untitled")")
+            WLLog.preview.debug("ignored CGWindowID match with wrong pid AX id=\(request.windowID) requestedPID=\(request.ownerPID.map(String.init) ?? "unknown") scPID=\(directPID.map(String.init) ?? "unknown") title=\(directMatch.title ?? "untitled")")
         }
 
         guard let ownerPID = request.ownerPID else { return nil }
@@ -378,11 +377,11 @@ final class WindowPreviewService: @unchecked Sendable {
         let hasUsableGeometry = request.bounds.width > 1 && request.bounds.height > 1
         let maximumAcceptableScore: CGFloat = hasUsableGeometry ? 80 : 45
         guard bestMatch.1 <= maximumAcceptableScore else {
-            log("rejected weak fallback match AX id=\(request.windowID) bestSC id=\(bestMatch.0.windowID) score=\(Int(bestMatch.1)) pid=\(ownerPID) title=\(bestMatch.0.title ?? "untitled")")
+            WLLog.preview.debug("rejected weak fallback match AX id=\(request.windowID) bestSC id=\(bestMatch.0.windowID) score=\(Int(bestMatch.1)) pid=\(ownerPID) title=\(bestMatch.0.title ?? "untitled")")
             return nil
         }
 
-        log("fallback matched AX id=\(request.windowID) to SC id=\(bestMatch.0.windowID) score=\(Int(bestMatch.1)) pid=\(ownerPID) title=\(bestMatch.0.title ?? "untitled")")
+        WLLog.preview.debug("fallback matched AX id=\(request.windowID) to SC id=\(bestMatch.0.windowID) score=\(Int(bestMatch.1)) pid=\(ownerPID) title=\(bestMatch.0.title ?? "untitled")")
         return bestMatch.0
     }
 
@@ -465,10 +464,6 @@ final class WindowPreviewService: @unchecked Sendable {
         "x=\(Int(rect.origin.x)) y=\(Int(rect.origin.y)) w=\(Int(rect.width)) h=\(Int(rect.height))"
     }
 
-    private func log(_ message: String) {
-        guard isPreviewDebugLoggingEnabled else { return }
-        print("[WindowPreviewService][debug] \(message)")
-    }
 
     private func markInFlight(_ key: String) -> Bool {
         lock.lock()
@@ -607,7 +602,7 @@ final class WindowPreviewService: @unchecked Sendable {
             self.isDiskCleanupInProgress = false
             self.lock.unlock()
 
-            print("[WindowPreviewService] Disk preview cache cleanup completed, removed \(removedCount) file(s)")
+            WLLog.preview.debug("Disk preview cache cleanup completed, removed \(removedCount) file(s)")
         }
     }
 

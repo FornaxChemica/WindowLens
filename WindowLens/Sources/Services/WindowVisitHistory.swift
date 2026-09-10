@@ -144,7 +144,7 @@ final class WindowVisitHistory: ObservableObject {
         }
 
         seedFromFrontmostIfNeeded()
-        print("[WindowVisitHistory] Monitoring started")
+        WLLog.general.debug("Monitoring started")
     }
 
     func stopMonitoring() {

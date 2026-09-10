@@ -252,7 +252,7 @@ final class WindowCache: @unchecked Sendable {
         prefetchInProgress = false
         lock.unlock()
 
-        print("[WindowCache] Prefetch complete, \(mergedApplications.count) apps, preserved MRU order")
+        WLLog.cache.debug("Prefetch complete, \(mergedApplications.count) apps, preserved MRU order")
     }
 
     /// Prefetch on background thread - non-blocking
@@ -283,7 +283,7 @@ final class WindowCache: @unchecked Sendable {
         }
         lock.unlock()
 
-        print("[WindowCache] Preview image references cleared: \(reason)")
+        WLLog.cache.debug("Preview image references cleared: \(reason)")
     }
 
     /// Move an app to the front of the cache. This is much faster than re-enumerating all windows.
@@ -293,7 +293,7 @@ final class WindowCache: @unchecked Sendable {
 
         guard let index = cache.firstIndex(where: { $0.pid == pid }) else {
             // App not in cache - invalidate so next fetch gets fresh data
-            print("[WindowCache] moveAppToFront: app PID \(pid) not in cache, invalidating")
+            WLLog.cache.debug("moveAppToFront: app PID \(pid) not in cache, invalidating")
             lastUpdate = nil
             return
         }
@@ -320,7 +320,7 @@ final class WindowCache: @unchecked Sendable {
         // Log the new order (top 5 apps)
         let topApps = cache.prefix(5).map { $0.name }.joined(separator: " > ")
         let source = fromOurSwitch ? "WindowLens" : "system"
-        print("[WindowCache] moveAppToFront: \(appName) moved from index \(index) to front via \(source). Order: \(topApps)")
+        WLLog.cache.debug("moveAppToFront: \(appName) moved from index \(index) to front via \(source). Order: \(topApps)")
     }
 
     @discardableResult
@@ -422,7 +422,7 @@ final class WindowCache: @unchecked Sendable {
 
     func startMonitoring() {
         guard workspaceObservers.isEmpty else {
-            print("[WindowCache] Workspace monitoring already started")
+            WLLog.cache.debug("Workspace monitoring already started")
             return
         }
 
@@ -441,7 +441,7 @@ final class WindowCache: @unchecked Sendable {
             let pid = app.processIdentifier
 
             let applications = self.reconcileActivatedApplication(app)
-            print("[WindowCache] App activation reconciled: \(app.localizedName ?? "unknown")")
+            WLLog.cache.debug("App activation reconciled: \(app.localizedName ?? "unknown")")
             NotificationCenter.default.post(
                 name: .workspaceActiveApplicationDidReconcile,
                 object: self,
@@ -467,7 +467,7 @@ final class WindowCache: @unchecked Sendable {
             ) { [weak self] notification in
                 guard let self = self else { return }
                 let appName = (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.localizedName ?? "unknown"
-                print("[WindowCache] App \(name == NSWorkspace.didLaunchApplicationNotification ? "launched" : "terminated"): \(appName), refreshing cache")
+                WLLog.cache.debug("App \(name == NSWorkspace.didLaunchApplicationNotification ? "launched" : "terminated"): \(appName), refreshing cache")
                 self.invalidate()
                 self.prefetchAsync()
             }
@@ -496,7 +496,7 @@ final class WindowCache: @unchecked Sendable {
         }
         workspaceObservers.append(spaceObserver)
 
-        print("[WindowCache] Started monitoring workspace notifications")
+        WLLog.cache.debug("Started monitoring workspace notifications")
     }
 
     func stopMonitoring() {
@@ -505,7 +505,7 @@ final class WindowCache: @unchecked Sendable {
             notificationCenter.removeObserver(observer)
         }
         workspaceObservers.removeAll()
-        print("[WindowCache] Stopped monitoring workspace notifications")
+        WLLog.cache.debug("Stopped monitoring workspace notifications")
     }
 }
 

@@ -31,12 +31,12 @@ final class DockProcessSwitcherObserver: NSObject {
         lastEmittedSelectionKey = nil
 
         guard AXIsProcessTrusted() else {
-            print("[DockProcessSwitcherObserver] Accessibility is not trusted")
+            WLLog.app.error("Accessibility is not trusted")
             return
         }
 
         guard let dock = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == "com.apple.dock" }) else {
-            print("[DockProcessSwitcherObserver] Dock process not found")
+            WLLog.app.error("Dock process not found")
             return
         }
 
@@ -57,7 +57,7 @@ final class DockProcessSwitcherObserver: NSObject {
         )
 
         guard createResult == .success, let createdObserver else {
-            print("[DockProcessSwitcherObserver] AXObserverCreate failed: \(createResult.rawValue)")
+            WLLog.app.error("AXObserverCreate failed: \(createResult.rawValue)")
             return
         }
 
@@ -127,7 +127,7 @@ final class DockProcessSwitcherObserver: NSObject {
 
         if !loggedDiscoveryMiss {
             loggedDiscoveryMiss = true
-            print("[DockProcessSwitcherObserver] Waiting for Dock AXProcessSwitcherList during Cmd+Tab session")
+            WLLog.app.debug("Waiting for Dock AXProcessSwitcherList during Cmd+Tab session")
         }
     }
 
@@ -172,12 +172,12 @@ final class DockProcessSwitcherObserver: NSObject {
 
         guard notificationResultIsUsable(selectionResult),
               notificationResultIsUsable(destroyedResult) else {
-            print("[DockProcessSwitcherObserver] AXObserverAddNotification failed: selected=\(selectionResult.rawValue) destroyed=\(destroyedResult.rawValue)")
+            WLLog.app.error("AXObserverAddNotification failed: selected=\(selectionResult.rawValue) destroyed=\(destroyedResult.rawValue)")
             return false
         }
 
         loggedDiscoveryMiss = false
-        print("[DockProcessSwitcherObserver] Observing Dock AXProcessSwitcherList")
+        WLLog.app.debug("Observing Dock AXProcessSwitcherList")
         emitCurrentSelection(from: switcherList)
         return true
     }

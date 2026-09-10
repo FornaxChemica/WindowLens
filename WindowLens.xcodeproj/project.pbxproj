@@ -71,6 +71,7 @@
 		D95155DC059D1EF5C943FAE3 /* OllamaClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FABD8057C72320563339BBD5 /* OllamaClient.swift */; };
 		EABA9C55A9C0853604140D22 /* ProcessResourceMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A242FB207BE266B280D4F2 /* ProcessResourceMonitor.swift */; };
 		FCBE066DB7D0E9CD8C45D201 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE222D814A9B0F3B619130C8 /* AppState.swift */; };
+		CD49C3762FCA14AB00E921C0 /* WLLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD49C3752FCA14AB00E921C0 /* WLLog.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -135,6 +136,7 @@
 		CD49C36E2FC8F89E00E921C0 /* PreviewIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewIdentity.swift; sourceTree = "<group>"; };
 		CD49C3702FCA149400E921C0 /* PermissionOnboardingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionOnboardingViewModel.swift; sourceTree = "<group>"; };
 		CD49C3722FCA14A900E921C0 /* PermissionOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionOnboardingView.swift; sourceTree = "<group>"; };
+		CD49C3752FCA14AB00E921C0 /* WLLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WLLog.swift; sourceTree = "<group>"; };
 		D399F35B0D527A537AA238C8 /* AppGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGridView.swift; sourceTree = "<group>"; };
 		D823A03FC81EF1179E0D8BA9 /* KeyboardEventTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardEventTap.swift; sourceTree = "<group>"; };
 		DB98C7EC8C47A3A89E4293AF /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
@@ -216,11 +218,20 @@
 			path = Core;
 			sourceTree = "<group>";
 		};
+		CD49C3742FCA14AB00E921C0 /* Debug */ = {
+			isa = PBXGroup;
+			children = (
+				CD49C3752FCA14AB00E921C0 /* WLLog.swift */,
+			);
+			path = Debug;
+			sourceTree = "<group>";
+		};
 		2E7216D6F7E40D4774B4D5E3 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
 				5D5160E94470D6B2C7CA87DA /* App */,
 				2B45388D5ABA3EE895A729C9 /* Core */,
+				CD49C3742FCA14AB00E921C0 /* Debug */,
 				95F42E9348ECC3DAE942E2A9 /* Models */,
 				1BA2010E135034C7314B533F /* Services */,
 				40B7248F01F2839A239D8046 /* UI */,
@@ -511,6 +522,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CD49C3762FCA14AB00E921C0 /* WLLog.swift in Sources */,
 				AF313ACAFA58581FAE8A2687 /* KeepAwakeDuration.swift in Sources */,
 				2E62F018CCD55F9FB4011873 /* PrivilegedPmsetRunner.swift in Sources */,
 				2FE09606E8F751E7A19A7B3A /* PmsetPrivilegeInstaller.swift in Sources */,

@@ -51,12 +51,12 @@ final class WindowNumberRegistry: ObservableObject {
         if !hasWindows {
             if initializeRetryCount < 3 {
                 initializeRetryCount += 1
-                print("[WindowNumberRegistry] Cache empty, retry \(initializeRetryCount)/3 in 0.5s")
+                WLLog.switcher.debug("Cache empty, retry \(self.initializeRetryCount)/3 in 0.5s")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                     self?.initializeFromCache()
                 }
             } else {
-                print("[WindowNumberRegistry] Cache still empty after retries, skipping assignment")
+                WLLog.switcher.error("Cache still empty after retries, skipping assignment")
             }
             return
         }
@@ -67,10 +67,10 @@ final class WindowNumberRegistry: ObservableObject {
            let restored = loadSavedAssignments(),
            !restored.isEmpty {
             applyRestoredAssignments(restored)
-            print("[WindowNumberRegistry] Restored \(restored.count) slot assignments from crash recovery")
+            WLLog.switcher.debug("Restored \(restored.count) slot assignments from crash recovery")
         } else {
             assignFromMRU(apps: apps)
-            print("[WindowNumberRegistry] Assigned slots from MRU cache order")
+            WLLog.switcher.debug("Assigned slots from MRU cache order")
         }
 
         didCompleteInitialAssignment = true
@@ -118,7 +118,7 @@ final class WindowNumberRegistry: ObservableObject {
         didCompleteInitialAssignment = true
         persist()
         bumpRevision()
-        print("[WindowNumberRegistry] Reassigned slot \(slot) to \(appName): \(windowTitle)")
+        WLLog.switcher.debug("Reassigned slot \(slot) to \(appName): \(windowTitle)")
     }
 
     func clearSlot(_ slot: Int) {
@@ -128,7 +128,7 @@ final class WindowNumberRegistry: ObservableObject {
         didCompleteInitialAssignment = true
         persist()
         bumpRevision()
-        print("[WindowNumberRegistry] Cleared slot \(slot)")
+        WLLog.switcher.debug("Cleared slot \(slot)")
     }
 
     func markDead(windowID: CGWindowID) {
@@ -140,7 +140,7 @@ final class WindowNumberRegistry: ObservableObject {
         assignments[slot] = assignment
         persist()
         bumpRevision()
-        print("[WindowNumberRegistry] Marked slot \(slot) dead (windowID \(windowID))")
+        WLLog.switcher.debug("Marked slot \(slot) dead (windowID \(windowID))")
     }
 
     func updateMetadata(windowID: CGWindowID, appName: String, windowTitle: String) {
@@ -163,12 +163,12 @@ final class WindowNumberRegistry: ObservableObject {
         ensureInitialized()
 
         guard let assignment = assignments[slot] else {
-            print("[WindowNumberRegistry] Slot \(slot) is vacant")
+            WLLog.switcher.error("Slot \(slot) is vacant")
             return .slotVacant(slot)
         }
 
         guard assignment.isAlive else {
-            print("[WindowNumberRegistry] Slot \(slot) window is dead")
+            WLLog.switcher.error("Slot \(slot) window is dead")
             return .windowUnavailable(slot)
         }
 
@@ -178,7 +178,7 @@ final class WindowNumberRegistry: ObservableObject {
                 in: resolved.app,
                 windowIndex: resolved.windowIndex
             )
-            print("[WindowNumberRegistry] Activated slot \(slot): \(assignment.appName): \(assignment.windowTitle)")
+            WLLog.switcher.debug("Activated slot \(slot): \(assignment.appName): \(assignment.windowTitle)")
             return .activated(
                 slot: slot,
                 appName: assignment.appName,
@@ -187,7 +187,7 @@ final class WindowNumberRegistry: ObservableObject {
         }
 
         markDead(windowID: assignment.windowID)
-        print("[WindowNumberRegistry] Slot \(slot) window not found in cache")
+        WLLog.switcher.error("Slot \(slot) window not found in cache")
         return .windowUnavailable(slot)
     }
 
@@ -328,7 +328,7 @@ final class WindowNumberRegistry: ObservableObject {
 
             assignments[dead.slot] = resurrected
             windowToSlot[window.windowID] = dead.slot
-            print("[WindowNumberRegistry] Resurrected slot \(dead.slot) for relaunched \(appModel.name): \(window.title)")
+            WLLog.switcher.debug("Resurrected slot \(dead.slot) for relaunched \(appModel.name): \(window.title)")
         }
 
         persist()
@@ -395,14 +395,14 @@ final class WindowNumberRegistry: ObservableObject {
         if !exists {
             assignment.isAlive = false
             assignments[slot] = assignment
-            print("[WindowNumberRegistry] Restored slot \(slot) window no longer exists, marked dead")
+            WLLog.switcher.debug("Restored slot \(slot) window no longer exists, marked dead")
         }
     }
 
     private func persist() {
         let encoder = JSONEncoder()
         guard let data = try? encoder.encode(Array(assignments.values)) else {
-            print("[WindowNumberRegistry] Failed to encode assignments")
+            WLLog.switcher.error("Failed to encode assignments")
             return
         }
         UserDefaults.standard.set(data, forKey: Self.assignmentsKey)

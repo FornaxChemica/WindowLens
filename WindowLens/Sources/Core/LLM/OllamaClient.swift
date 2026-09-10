@@ -53,7 +53,7 @@ actor OllamaClient {
             // Try common install locations
             let candidates = ["/usr/local/bin/ollama", "/opt/homebrew/bin/ollama"]
             guard let found = candidates.first(where: { FileManager.default.fileExists(atPath: $0) }) else {
-                print("[OllamaClient] ollama not found")
+                WLLog.general.error("ollama not found")
                 return false
             }
             ollamaPath = found
@@ -70,9 +70,9 @@ actor OllamaClient {
             try proc.run()
             serverProcess = proc
             weStartedServer = true
-            print("[OllamaClient] Started ollama serve (PID \(proc.processIdentifier))")
+            WLLog.general.debug("Started ollama serve (PID \(proc.processIdentifier))")
         } catch {
-            print("[OllamaClient] Failed to start ollama: \(error)")
+            WLLog.general.error("Failed to start ollama: \(error)")
             return false
         }
 
@@ -80,12 +80,12 @@ actor OllamaClient {
         for _ in 0..<16 {
             try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
             if await isAvailable() {
-                print("[OllamaClient] Server ready")
+                WLLog.general.debug("Server ready")
                 return true
             }
         }
 
-        print("[OllamaClient] Server did not become ready in time")
+        WLLog.general.debug("Server did not become ready in time")
         return false
     }
 
@@ -95,13 +95,13 @@ actor OllamaClient {
 
         // SIGTERM for graceful shutdown
         proc.terminate()
-        print("[OllamaClient] Sent SIGTERM to ollama (PID \(proc.processIdentifier))")
+        WLLog.general.debug("Sent SIGTERM to ollama (PID \(proc.processIdentifier))")
 
         // Give it 3 seconds, then force kill
         DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak proc] in
             guard let proc = proc, proc.isRunning else { return }
             kill(proc.processIdentifier, SIGKILL)
-            print("[OllamaClient] Force killed ollama")
+            WLLog.general.debug("Force killed ollama")
         }
 
         serverProcess = nil

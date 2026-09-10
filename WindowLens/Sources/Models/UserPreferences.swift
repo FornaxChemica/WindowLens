@@ -171,7 +171,7 @@ struct UserPreferences: Codable {
             }
 
             defaults.set(data, forKey: key)
-            print("[UserPreferences] Migrated preferences from legacy BetterTabbing defaults")
+            WLLog.general.debug("Migrated preferences from legacy BetterTabbing defaults")
             return prefs
         }
 

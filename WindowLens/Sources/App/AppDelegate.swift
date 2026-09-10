@@ -51,7 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         // Panel manager is a lazy singleton - will create panels on first show.
-        print("[WindowLens] App initialized successfully")
+        WLLog.app.debug("App initialized successfully")
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
@@ -79,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         permissionMonitorTimer?.invalidate()
         permissionMonitorTimer = nil
         KeepAwakeManager.shared.prepareForTerminate()
-        print("[WindowLens] App terminating")
+        WLLog.app.debug("App terminating")
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     deinit {
-        print("[WindowLens] AppDelegate deinit")
+        WLLog.app.debug("AppDelegate deinit")
     }
 
     private func logLaunchDiagnostics(status: PermissionManager.Status, context: String) {
@@ -107,10 +107,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let displayName = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "unknown"
         let executableName = bundle.object(forInfoDictionaryKey: "CFBundleExecutable") as? String ?? "unknown"
         let bundleIdentifier = bundle.bundleIdentifier ?? "unknown"
-        print("[WindowLens][\(context)] displayName=\(displayName) executable=\(executableName) bundleID=\(bundleIdentifier)")
-        print("[WindowLens][\(context)] AXIsProcessTrusted=\(status.accessibility)")
-        print("[WindowLens][\(context)] IOHIDCheckAccess.listenEvent=\(status.inputMonitoring)")
-        print("[WindowLens][\(context)] CGPreflightScreenCaptureAccess=\(status.screenRecording)")
+        WLLog.app.debug("[\(context)] displayName=\(displayName) executable=\(executableName) bundleID=\(bundleIdentifier)")
+        WLLog.app.debug("[\(context)] AXIsProcessTrusted=\(status.accessibility)")
+        WLLog.app.debug("[\(context)] IOHIDCheckAccess.listenEvent=\(status.inputMonitoring)")
+        WLLog.app.debug("[\(context)] CGPreflightScreenCaptureAccess=\(status.screenRecording)")
     }
 
     private func startPermissionMonitoring() {
@@ -122,7 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
 
-        print("[WindowLens] Permission monitor started")
+        WLLog.permissions.debug("Permission monitor started")
     }
 
     private func refreshPermissionGate(context: String) async {
@@ -158,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 WindowCache.shared.stopMonitoring()
                 hasStartedWindowCache = false
                 WindowVisitHistory.shared.stopMonitoring()
-                print("[WindowLens] WindowCache monitoring stopped: Accessibility permission is missing")
+                WLLog.permissions.error("WindowCache monitoring stopped: Accessibility permission is missing")
             }
 
             if !status.inputMonitoring {
@@ -173,7 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
 
             if shouldLogStatus {
-                print("[WindowLens] Permission gate blocked context=\(context):\n\(status.description)")
+                WLLog.permissions.error("Permission gate blocked context=\(context):\n\(status.description)")
             }
 
             closePermissionReadyWindow()
@@ -234,7 +234,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         } else {
             window.orderFront(nil)
         }
-        print("[WindowLens] Permission onboarding window shown (autoDismiss=\(autoDismiss))")
+        WLLog.permissions.debug("Permission onboarding window shown (autoDismiss=\(autoDismiss))")
     }
 
     private func closePermissionOnboardingWindow() {
@@ -265,7 +265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         permissionReadyWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        print("[WindowLens] Permission ready window shown")
+        WLLog.permissions.debug("Permission ready window shown")
     }
 
     private func closePermissionReadyWindow() {
@@ -303,7 +303,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         if !hasCompletedPermissionGate {
-            print("[WindowLens] Permission gate completed context=\(context)")
+            WLLog.permissions.debug("Permission gate completed context=\(context)")
         }
         hasCompletedPermissionGate = true
 
@@ -359,7 +359,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         context: String
     ) {
         guard status.accessibility else {
-            print("[WindowLens] WindowCache startup skipped: Accessibility is not granted context=\(context)")
+            WLLog.permissions.error("WindowCache startup skipped: Accessibility is not granted context=\(context)")
             return
         }
 
@@ -367,7 +367,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hasStartedWindowCache = true
         WindowCache.shared.startMonitoring()
         WindowCache.shared.prefetchAsync()
-        print("[WindowLens] WindowCache monitoring started context=\(context)")
+        WLLog.app.debug("WindowCache monitoring started context=\(context)")
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             WindowNumberRegistry.shared.initializeFromCache()
@@ -375,7 +375,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func setupEventTap() {
-        print("[WindowLens] Creating KeyboardEventTap manager")
+        WLLog.app.debug("Creating KeyboardEventTap manager")
         eventTap = KeyboardEventTap()
 
         eventTap?.onShortcutTriggered
@@ -493,7 +493,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     }
 
                     guard !self.isNativeCommandTabSessionActive else {
-                        print("[WindowLens] Live MRU updated during native Cmd+Tab; visible snapshot remains frozen")
+                        WLLog.app.debug("Live MRU updated during native Cmd+Tab; visible snapshot remains frozen")
                         return
                     }
 
@@ -539,7 +539,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         // Load shortcut bindings from preferences.
         eventTap?.reloadShortcutBindings(from: AppState.shared.preferences)
-        print("[WindowLens] Loaded workspace activation shortcut: \(AppState.shared.preferences.shortcuts.workspaceOpen.displayString)")
+        WLLog.app.debug("Loaded workspace activation shortcut: \(AppState.shared.preferences.shortcuts.workspaceOpen.displayString)")
 
         NotificationCenter.default.publisher(for: .openSettings)
             .receive(on: DispatchQueue.main)
@@ -585,7 +585,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             .store(in: &cancellables)
 
-        print("[WindowLens] Event tap configured")
+        WLLog.app.debug("Event tap configured")
         eventTap?.logStartupDiagnostics(context: "setupEventTap complete")
     }
 
@@ -597,7 +597,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            print("[WindowLens] NSWorkspace session became active; refreshing permission gate")
+            WLLog.app.debug("NSWorkspace session became active; refreshing permission gate")
             Task { @MainActor [weak self] in
                 await self?.refreshPermissionGate(context: "workspace session became active")
             }
@@ -608,7 +608,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            print("[WindowLens] NSWorkspace did wake; refreshing permission gate")
+            WLLog.app.debug("NSWorkspace did wake; refreshing permission gate")
             Task { @MainActor [weak self] in
                 await self?.refreshPermissionGate(context: "workspace did wake")
             }
@@ -631,7 +631,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         workspaceObserverTokens = [sessionToken, wakeToken, activateToken]
-        print("[WindowLens] Workspace recovery observers installed")
+        WLLog.app.debug("Workspace recovery observers installed")
     }
 
     private func setupWindowSlotObservers() {
@@ -666,7 +666,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         windowSlotObserverTokens = [terminateToken, launchToken]
-        print("[WindowLens] Window slot observers installed")
+        WLLog.app.debug("Window slot observers installed")
     }
 
     /// True when Settings / Heatmap / Unused Windows / onboarding is actually on-screen.
@@ -714,7 +714,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         lastPrimaryWindowPresentAt = Date()
 
-        print("[WindowLens] Presenting Settings (\(reason)) active=\(NSApp.isActive) hidden=\(NSApp.isHidden)")
+        WLLog.app.debug("Presenting Settings (\(reason)) active=\(NSApp.isActive) hidden=\(NSApp.isHidden)")
         showSettingsWindow()
     }
 
@@ -727,7 +727,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         // Closing the last key window often leaves us frontmost but inactive — Cmd-Tab
         // then no-ops. Drop frontmost ownership so the next Dock click / Cmd-Tab is real.
-        print("[WindowLens] No primary window — yielding frontmost so next activation restores Settings")
+        WLLog.app.debug("No primary window — yielding frontmost so next activation restores Settings")
         NSApp.hide(nil)
         NSApp.deactivate()
 
@@ -781,7 +781,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         NSApp.activate(ignoringOtherApps: true)
 
-        print("[WindowLens] Settings window shown")
+        WLLog.app.debug("Settings window shown")
     }
 
     private func showHeatmapWindow() {
@@ -810,7 +810,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         heatmapWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        print("[WindowLens] Heatmap window shown")
+        WLLog.app.debug("Heatmap window shown")
     }
 
     private func showDeadWindowsWindow() {
@@ -834,7 +834,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         deadWindowsWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        print("[WindowLens] Unused Windows window shown")
+        WLLog.app.debug("Unused Windows window shown")
     }
 
     private func findExistingSettingsWindow() -> NSWindow? {
@@ -849,7 +849,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func handleShortcutEvent(_ event: ShortcutEvent) {
-        print("[WindowLens] Shortcut event: \(event)")
+        WLLog.app.debug("Shortcut event: \(String(describing: event), privacy: .public)")
 
         switch event {
         case .activationStarted:
@@ -1412,7 +1412,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let apps = WindowCache.shared.getCachedApplications()
 
         guard apps.count > 1 else {
-            print("[WindowLens] Quick switch: Not enough apps (have \(apps.count))")
+            WLLog.app.debug("Quick switch: Not enough apps (have \(apps.count))")
             return
         }
 
@@ -1430,11 +1430,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         guard let previousApp = targetApp else {
-            print("[WindowLens] Quick switch: No different app to switch to")
+            WLLog.app.error("Quick switch: No different app to switch to")
             return
         }
 
-        print("[WindowLens] Quick switch to: \(previousApp.name)")
+        WLLog.app.debug("Quick switch to: \(previousApp.name)")
 
         // Activate synchronously for speed
         WindowSwitcher.shared.activate(app: previousApp)

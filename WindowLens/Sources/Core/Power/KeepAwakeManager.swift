@@ -53,7 +53,7 @@ final class KeepAwakeManager: ObservableObject {
                 try? PrivilegedPmsetRunner.setSleepDisabled(false)
             }
             Self.clearArmedFlag()
-            print("[StayAwake] Reconciled leftover lid-closed sleep disable on launch")
+            WLLog.general.debug("Reconciled leftover lid-closed sleep disable on launch")
         }
         refreshStatusMessage()
     }
@@ -330,7 +330,7 @@ final class KeepAwakeManager: ObservableObject {
             lidClosedArmedByUs = true
             Self.writeArmedFlag()
         } catch {
-            print("[StayAwake] Lid-closed enable failed: \(error.localizedDescription)")
+            WLLog.general.error("Lid-closed enable failed: \(error.localizedDescription)")
             lidClosedStayAwakeEnabled = false
             lidPrivilegeError = error.localizedDescription
         }

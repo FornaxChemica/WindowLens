@@ -27,7 +27,7 @@ final class WindowSwitcher: @unchecked Sendable {
     /// Activate an app (bring to front)
     func activate(app: ApplicationModel) {
         guard let runningApp = NSRunningApplication(processIdentifier: app.pid) else {
-            print("[WindowSwitcher] Could not find running app for PID: \(app.pid)")
+            WLLog.switcher.error("Could not find running app for PID: \(app.pid)")
             return
         }
 
@@ -44,16 +44,16 @@ final class WindowSwitcher: @unchecked Sendable {
 
         // If app has no windows, open a new one instead of just activating
         if axWindows.isEmpty, let bundleURL = runningApp.bundleURL {
-            print("[WindowSwitcher] App \(app.name) has no windows, opening new window")
+            WLLog.switcher.debug("App \(app.name) has no windows, opening new window")
             let config = NSWorkspace.OpenConfiguration()
             config.activates = true
             config.createsNewApplicationInstance = false
 
             NSWorkspace.shared.openApplication(at: bundleURL, configuration: config) { _, error in
                 if let error = error {
-                    print("[WindowSwitcher] Failed to open new window for \(app.name): \(error)")
+                    WLLog.switcher.error("Failed to open new window for \(app.name): \(error)")
                 } else {
-                    print("[WindowSwitcher] Successfully opened new window for \(app.name)")
+                    WLLog.switcher.debug("Successfully opened new window for \(app.name)")
                 }
             }
             WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
@@ -70,7 +70,7 @@ final class WindowSwitcher: @unchecked Sendable {
 
         // If standard activate fails, try hiding the current app first then activating
         if !success {
-            print("[WindowSwitcher] Standard activate failed (from \(currentFrontmostName)), hiding frontmost and retrying")
+            WLLog.switcher.error("Standard activate failed (from \(currentFrontmostName)), hiding frontmost and retrying")
             currentFrontmost?.hide()
             usleep(10000)  // 10ms for hide to take effect
             success = runningApp.activate()
@@ -78,7 +78,7 @@ final class WindowSwitcher: @unchecked Sendable {
 
         // If still failing, try NSWorkspace.open()
         if !success, let bundleURL = runningApp.bundleURL {
-            print("[WindowSwitcher] Hide+activate failed, trying NSWorkspace.open()")
+            WLLog.switcher.error("Hide+activate failed, trying NSWorkspace.open()")
             let config = NSWorkspace.OpenConfiguration()
             config.activates = true
             config.createsNewApplicationInstance = false
@@ -97,7 +97,7 @@ final class WindowSwitcher: @unchecked Sendable {
 
         // Last resort: AX focus
         if !success {
-            print("[WindowSwitcher] All methods failed, using AX focus as last resort")
+            WLLog.switcher.error("All methods failed, using AX focus as last resort")
             let systemWide = AXUIElementCreateSystemWide()
             AXUIElementSetAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, axApp)
             if let window = firstWindow {
@@ -106,7 +106,7 @@ final class WindowSwitcher: @unchecked Sendable {
             success = true  // Assume it worked
         }
 
-        print("[WindowSwitcher] Activated \(app.name): \(success)")
+        WLLog.switcher.debug("Activated \(app.name): \(success)")
 
         // Update cache order
         WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
@@ -121,7 +121,7 @@ final class WindowSwitcher: @unchecked Sendable {
     /// windowIndex is the index in the app.windows array for fallback matching
     func switchTo(window: WindowModel, in app: ApplicationModel, windowIndex: Int? = nil) {
         guard let runningApp = NSRunningApplication(processIdentifier: app.pid) else {
-            print("[WindowSwitcher] Could not find running app for PID: \(app.pid)")
+            WLLog.switcher.error("Could not find running app for PID: \(app.pid)")
             return
         }
 
@@ -129,16 +129,16 @@ final class WindowSwitcher: @unchecked Sendable {
 
         // If app has no windows, open a new one instead of trying to switch
         if axWindows.isEmpty, let bundleURL = runningApp.bundleURL {
-            print("[WindowSwitcher] App \(app.name) has no windows, opening new window")
+            WLLog.switcher.debug("App \(app.name) has no windows, opening new window")
             let config = NSWorkspace.OpenConfiguration()
             config.activates = true
             config.createsNewApplicationInstance = false
 
             NSWorkspace.shared.openApplication(at: bundleURL, configuration: config) { _, error in
                 if let error = error {
-                    print("[WindowSwitcher] Failed to open new window for \(app.name): \(error)")
+                    WLLog.switcher.error("Failed to open new window for \(app.name): \(error)")
                 } else {
-                    print("[WindowSwitcher] Successfully opened new window for \(app.name)")
+                    WLLog.switcher.debug("Successfully opened new window for \(app.name)")
                 }
             }
             WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
@@ -149,7 +149,7 @@ final class WindowSwitcher: @unchecked Sendable {
         if window.previewIdentity.hasReliableCGWindowID,
            window.windowID != 0,
            let axWindow = AXWindowHelper.getAXWindow(for: window.windowID, pid: app.pid) {
-            print("[WindowSwitcher] Found window by ID \(window.windowID)")
+            WLLog.switcher.debug("Found window by ID \(window.windowID)")
             raiseAndActivate(axWindow: axWindow, window: window, runningApp: runningApp, app: app, windowIndex: windowIndex)
             return
         }
@@ -157,12 +157,12 @@ final class WindowSwitcher: @unchecked Sendable {
         // Strategy 2: Try to find by window index (fallback when CGWindowID is unavailable)
         if let index = windowIndex, index < axWindows.count {
             let axWindow = axWindows[index]
-            print("[WindowSwitcher] Using window index \(index)")
+            WLLog.switcher.debug("Using window index \(index)")
             raiseAndActivate(axWindow: axWindow, window: window, runningApp: runningApp, app: app, windowIndex: index)
             return
         }
 
-        print("[WindowSwitcher] Could not find window by ID \(window.windowID), trying title match")
+        WLLog.switcher.error("Could not find window by ID \(window.windowID), trying title match")
 
         // Strategy 3: Fall back to title matching
         for axWindow in axWindows {
@@ -183,13 +183,13 @@ final class WindowSwitcher: @unchecked Sendable {
             if let title = titleRef as? String, !title.isEmpty, !window.title.isEmpty,
                (title.hasPrefix(window.title) || window.title.hasPrefix(title) ||
                 title.contains(window.title) || window.title.contains(title)) {
-                print("[WindowSwitcher] Found window by partial title match: '\(title)'")
+                WLLog.switcher.debug("Found window by partial title match: '\(title)'")
                 raiseAndActivate(axWindow: axWindow, window: window, runningApp: runningApp, app: app, windowIndex: windowIndex)
                 return
             }
         }
 
-        print("[WindowSwitcher] Window not found by ID or title, activating first window")
+        WLLog.switcher.error("Window not found by ID or title, activating first window")
 
         // Strategy 5: Just activate the first window
         if let firstWindow = axWindows.first {
@@ -197,7 +197,7 @@ final class WindowSwitcher: @unchecked Sendable {
         }
 
         let activated = activateWithFallbacks(runningApp: runningApp, focusAXWindow: axWindows.first)
-        print("[WindowSwitcher] Activated \(app.name): \(activated)")
+        WLLog.switcher.debug("Activated \(app.name): \(activated)")
 
         if activated {
             WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
@@ -217,14 +217,14 @@ final class WindowSwitcher: @unchecked Sendable {
         var success = runningApp.activate()
 
         if !success {
-            print("[WindowSwitcher] Standard activate failed (from \(currentFrontmostName)), hiding frontmost and retrying")
+            WLLog.switcher.error("Standard activate failed (from \(currentFrontmostName)), hiding frontmost and retrying")
             currentFrontmost?.hide()
             usleep(10000)
             success = runningApp.activate()
         }
 
         if !success, let bundleURL = runningApp.bundleURL {
-            print("[WindowSwitcher] Hide+activate failed, trying NSWorkspace.open()")
+            WLLog.switcher.error("Hide+activate failed, trying NSWorkspace.open()")
             let config = NSWorkspace.OpenConfiguration()
             config.activates = true
             config.createsNewApplicationInstance = false
@@ -242,7 +242,7 @@ final class WindowSwitcher: @unchecked Sendable {
         }
 
         if !success {
-            print("[WindowSwitcher] All methods failed, using AX focus as last resort")
+            WLLog.switcher.error("All methods failed, using AX focus as last resort")
             let systemWide = AXUIElementCreateSystemWide()
             AXUIElementSetAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, axApp)
             if let axWindow {
@@ -273,11 +273,11 @@ final class WindowSwitcher: @unchecked Sendable {
 
         // Raise the window
         let raiseResult = AXUIElementPerformAction(axWindow, kAXRaiseAction as CFString)
-        print("[WindowSwitcher] Raised window '\(window.title)': \(raiseResult == .success)")
+        WLLog.switcher.debug("Raised window '\(window.title)': \(raiseResult == .success)")
 
         // Activate the app (with fallbacks for sticky frontmost apps)
         let activated = activateWithFallbacks(runningApp: runningApp, focusAXWindow: axWindow)
-        print("[WindowSwitcher] Activated \(app.name): \(activated)")
+        WLLog.switcher.debug("Activated \(app.name): \(activated)")
 
         // Update cache order
         if activated {
@@ -294,7 +294,7 @@ final class WindowSwitcher: @unchecked Sendable {
 
     func switchToWindow(byID windowID: CGWindowID, pid: pid_t) {
         guard let runningApp = NSRunningApplication(processIdentifier: pid) else {
-            print("[WindowSwitcher] Could not find running app for PID: \(pid)")
+            WLLog.switcher.error("Could not find running app for PID: \(pid)")
             return
         }
 

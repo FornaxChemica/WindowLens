@@ -231,7 +231,7 @@ final class AppState: ObservableObject {
 
     func setWindowPreview(_ update: WindowPreviewUpdate) {
         guard isVisible else {
-            print("[AppState][preview] dropped preview while switcher hidden for windowID=\(update.windowID) pid=\(update.ownerPID.map(String.init) ?? "unknown")")
+            WLLog.preview.error("dropped preview while switcher hidden for windowID=\(update.windowID) pid=\(update.ownerPID.map(String.init) ?? "unknown")")
             return
         }
 
@@ -257,14 +257,14 @@ final class AppState: ObservableObject {
         }
 
         guard let match = bestMatch else {
-            print("[AppState][preview] dropped preview; no matching windowID=\(update.windowID) pid=\(update.ownerPID.map(String.init) ?? "unknown")")
+            WLLog.preview.error("dropped preview; no matching windowID=\(update.windowID) pid=\(update.ownerPID.map(String.init) ?? "unknown")")
             return
         }
 
         var updatedApplications = applications
         updatedApplications[match.appIndex].windows[match.windowIndex].previewImage = update.image
         applications = updatedApplications
-        print("[AppState][preview] applied preview for windowID=\(update.windowID) pid=\(update.ownerPID.map(String.init) ?? "unknown")")
+        WLLog.preview.debug("applied preview for windowID=\(update.windowID) pid=\(update.ownerPID.map(String.init) ?? "unknown")")
     }
 
     private func previewMatchScore(update: WindowPreviewUpdate, for window: WindowModel) -> Int? {
@@ -661,7 +661,7 @@ final class AppState: ObservableObject {
         }
 
         guard let index = indexOfApplication(pid: pid, bundleIdentifier: bundleIdentifier, title: title) else {
-            print("[AppState] Could not resolve native Cmd+Tab selection pid=\(pid.map(String.init) ?? "unknown") bundle=\(bundleIdentifier ?? "unknown") title=\(title ?? "unknown")")
+            WLLog.app.error("Could not resolve native Cmd+Tab selection pid=\(pid.map(String.init) ?? "unknown") bundle=\(bundleIdentifier ?? "unknown") title=\(title ?? "unknown")")
             return false
         }
 
@@ -840,12 +840,12 @@ final class AppState: ObservableObject {
         latestLiveMRUApplications = newApplications
 
         guard !isNativeTraversalSnapshotActive else {
-            print("[AppState] Ignored live MRU reorder while native Cmd+Tab snapshot is frozen")
+            WLLog.app.debug("Ignored live MRU reorder while native Cmd+Tab snapshot is frozen")
             return
         }
 
         if presentationMode == .workspace, workspaceSessionSnapshot != nil {
-            print("[AppState] Ignored live MRU reorder while WindowLens workspace snapshot is frozen")
+            WLLog.app.debug("Ignored live MRU reorder while WindowLens workspace snapshot is frozen")
             return
         }
 
@@ -1278,7 +1278,7 @@ final class AppState: ObservableObject {
 
         if let runningApp = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleIdentifier).first {
             runningApp.terminate()
-            print("[AppState] Quit app: \(app.name)")
+            WLLog.app.debug("Quit app: \(app.name)")
         }
 
         if let index = applications.firstIndex(where: { $0.pid == app.pid }) {
@@ -1296,7 +1296,7 @@ final class AppState: ObservableObject {
 
     func clearPreviewImages(reason: String) {
         guard !isVisible else {
-            print("[AppState] Skipped preview image clearing while switcher is visible: \(reason)")
+            WLLog.app.error("Skipped preview image clearing while switcher is visible: \(reason)")
             return
         }
 
@@ -1305,7 +1305,7 @@ final class AppState: ObservableObject {
         workspaceSessionSnapshot = workspaceSessionSnapshot?.strippingPreviewImages()
         latestLiveMRUApplications = latestLiveMRUApplications.strippingPreviewImages()
 
-        print("[AppState] Preview image references cleared: \(reason)")
+        WLLog.app.debug("Preview image references cleared: \(reason)")
     }
 
     func reset() {

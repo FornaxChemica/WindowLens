@@ -564,7 +564,7 @@ final class SwitcherPanel: NSPanel {
         startClickOutsideMonitor()
 
         let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-        print("[SwitcherPanel] Shown in \(Int(elapsed))ms with \(finalApps.count) apps, size: \(Int(panelSize.width))x\(Int(panelSize.height))")
+        WLLog.switcher.debug("Shown in \(Int(elapsed))ms with \(finalApps.count) apps, size: \(Int(panelSize.width))x\(Int(panelSize.height))")
     }
 
     /// Legacy show method (forces refresh) - synchronous
@@ -606,7 +606,7 @@ final class SwitcherPanel: NSPanel {
 
         // Start monitoring for clicks outside the panel
         startClickOutsideMonitor()
-        print("[SwitcherPanel] Shown with size: \(Int(panelSize.width))x\(Int(panelSize.height))")
+        WLLog.switcher.debug("Shown with size: \(Int(panelSize.width))x\(Int(panelSize.height))")
     }
 
     /// Show panel on its associated screen (used by SwitcherPanelManager for multi-screen display)
@@ -672,7 +672,7 @@ final class SwitcherPanel: NSPanel {
         AppState.shared.reset()
         SwitcherPanelManager.shared.scheduleIdlePreviewMemoryTrim(reason: "single panel hidden")
 
-        print("[SwitcherPanel] Hidden")
+        WLLog.switcher.debug("Hidden")
     }
 
     private func presentWithEntranceAnimation() {

@@ -640,14 +640,14 @@ struct HeatmapView: View {
             switch action {
             case .minimize:
                 presentActionMessage("Couldn't minimize \"\(windowLabel)\"")
-                print("[HeatmapView] minimize failed surfaceID=\(record.surfaceID)")
+                WLLog.general.error("minimize failed surfaceID=\(record.surfaceID)")
             case .close:
                 if live.isMinimized {
                     presentActionMessage("Couldn't close \"\(windowLabel)\" — try restoring it from the Dock first.")
                 } else {
                     presentActionMessage("Couldn't close \"\(windowLabel)\"")
                 }
-                print("[HeatmapView] close failed surfaceID=\(record.surfaceID) windowID=\(live.windowID) minimized=\(live.isMinimized)")
+                WLLog.general.error("close failed surfaceID=\(record.surfaceID) windowID=\(live.windowID) minimized=\(live.isMinimized)")
             }
         }
     }
@@ -660,10 +660,7 @@ struct HeatmapView: View {
         }.value
         applyLoadedSnapshot(records: records, applications: applications)
         isLoading = false
-        print(
-            "[HeatmapView] loaded \(records.count) records, "
-                + "\(summaries.count) apps, \(runningAppNames.count) running"
-        )
+        WLLog.general.debug("loaded \(records.count) records, \(self.summaries.count) apps, \(self.runningAppNames.count) running")
     }
 
     private func applyLoadedSnapshot(records: [WindowUsageRecord], applications: [ApplicationModel]) {

@@ -61,7 +61,7 @@ actor PermissionManager {
     @discardableResult
     private func requestInputMonitoring() -> Bool {
         let granted = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
-        print("[PermissionManager] Input Monitoring request result: \(granted)")
+        WLLog.permissions.debug("Input Monitoring request result: \(granted)")
         return granted || checkInputMonitoring()
     }
 
@@ -81,7 +81,7 @@ actor PermissionManager {
             return AXIsProcessTrusted()
         }
 
-        print("[PermissionManager] Accessibility permission requested")
+        WLLog.permissions.debug("Accessibility permission requested")
         return trusted || checkAccessibility()
     }
 
@@ -97,7 +97,7 @@ actor PermissionManager {
             CGRequestScreenCaptureAccess()
         }
 
-        print("[PermissionManager] Screen Recording request result: \(granted)")
+        WLLog.permissions.debug("Screen Recording request result: \(granted)")
         return granted || checkScreenRecording()
     }
 

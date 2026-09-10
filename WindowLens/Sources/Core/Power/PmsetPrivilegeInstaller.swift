@@ -48,7 +48,7 @@ enum PmsetPrivilegeInstaller {
         do {
             try rule.write(to: tempURL, atomically: true, encoding: .utf8)
         } catch {
-            print("[StayAwake] Failed to write temp sudoers: \(error)")
+            WLLog.general.error("Failed to write temp sudoers: \(error)")
             return false
         }
 
@@ -78,7 +78,7 @@ enum PmsetPrivilegeInstaller {
         } catch {
             try? FileManager.default.removeItem(at: tempURL)
             invalidateCache()
-            print("[StayAwake] Privilege install failed to launch osascript: \(error)")
+            WLLog.general.error("Privilege install failed to launch osascript: \(error)")
             return false
         }
 
@@ -92,7 +92,7 @@ enum PmsetPrivilegeInstaller {
 
         if status != 0 {
             invalidateCache()
-            print("[StayAwake] Privilege install osascript failed (\(status)): \(errText) \(outText)")
+            WLLog.general.error("Privilege install osascript failed (\(status)): \(errText) \(outText)")
             return false
         }
 
@@ -111,7 +111,7 @@ enum PmsetPrivilegeInstaller {
         }
 
         if !sudoOK {
-            print("[StayAwake] Privilege install wrote sudoers but passwordless pmset still fails. stderr=\(errText)")
+            WLLog.general.debug("Privilege install wrote sudoers but passwordless pmset still fails. stderr=\(errText)")
         }
 
         cacheLock.lock()
@@ -135,7 +135,7 @@ enum PmsetPrivilegeInstaller {
             if process.terminationStatus != 0 {
                 let data = stderr.fileHandleForReading.readDataToEndOfFile()
                 if let message = String(data: data, encoding: .utf8), !message.isEmpty {
-                    print("[StayAwake] sudo -n pmset probe failed: \(message)")
+                    WLLog.general.error("sudo -n pmset probe failed: \(message)")
                 }
             }
             return process.terminationStatus == 0

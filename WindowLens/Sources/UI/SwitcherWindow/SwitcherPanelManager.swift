@@ -41,7 +41,7 @@ final class SwitcherPanelManager {
         for id in removedIds {
             panels[id]?.orderOut(nil)
             panels.removeValue(forKey: id)
-            print("[SwitcherPanelManager] Removed panel for disconnected screen: \(id)")
+            WLLog.switcher.debug("Removed panel for disconnected screen: \(id)")
         }
 
         // If panels are currently visible, add panels for new screens
@@ -52,7 +52,7 @@ final class SwitcherPanelManager {
                     let panel = createPanel(for: screen)
                     panels[id] = panel
                     panel.showOnScreen(mode: AppState.shared.presentationMode, skipStateUpdate: true)
-                    print("[SwitcherPanelManager] Added panel for new screen: \(id)")
+                    WLLog.switcher.debug("Added panel for new screen: \(id)")
                 }
             }
         }
@@ -122,7 +122,7 @@ final class SwitcherPanelManager {
         }
 
         let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-        print("[SwitcherPanelManager] Shown \(panels.count) panels in \(Int(elapsed))ms with \(finalApps.count) apps")
+        WLLog.switcher.debug("Shown \(self.panels.count) panels in \(Int(elapsed))ms with \(finalApps.count) apps")
     }
 
     func show(mode: SwitcherPresentationMode = .workspace) {
@@ -138,7 +138,7 @@ final class SwitcherPanelManager {
             panel.showOnScreen(mode: mode, skipStateUpdate: true)
         }
 
-        print("[SwitcherPanelManager] Shown \(panels.count) panels")
+        WLLog.switcher.debug("Shown \(self.panels.count) panels")
     }
 
     func showNativePreview(applications: [ApplicationModel], showImmediately: Bool = true) {
@@ -146,7 +146,7 @@ final class SwitcherPanelManager {
         if showImmediately {
             showNativePanelOnTargetScreen()
         }
-        print("[SwitcherPanelManager] Shown native preview session with \(applications.count) apps")
+        WLLog.switcher.debug("Shown native preview session with \(applications.count) apps")
     }
 
     func showNativeFallbackPreviewPanel() {
@@ -157,7 +157,7 @@ final class SwitcherPanelManager {
     func showNativeTraversalSnapshot(applications: [ApplicationModel], reverse: Bool) {
         AppState.shared.beginNativeTraversalSnapshot(applications, reverse: reverse)
         showNativePanelOnTargetScreen()
-        print("[SwitcherPanelManager] Shown frozen native traversal snapshot with \(applications.count) apps")
+        WLLog.switcher.debug("Shown frozen native traversal snapshot with \(applications.count) apps")
     }
 
     func showCurrentAppWindowSwitcher() {
@@ -173,7 +173,7 @@ final class SwitcherPanelManager {
         }
 
         targetPanel.showOnScreen(mode: .workspace, skipStateUpdate: true)
-        print("[SwitcherPanelManager] Shown current-app window switcher")
+        WLLog.switcher.debug("Shown current-app window switcher")
     }
 
     private func showNativePanelOnTargetScreen() {
@@ -282,7 +282,7 @@ final class SwitcherPanelManager {
         }
         AppState.shared.reset()
         scheduleIdlePreviewMemoryTrim(reason: "switcher hidden")
-        print("[SwitcherPanelManager] Hidden all \(panels.count) panels")
+        WLLog.switcher.debug("Hidden all \(self.panels.count) panels")
     }
 
     func scheduleIdlePreviewMemoryTrim(reason: String) {
@@ -291,14 +291,14 @@ final class SwitcherPanelManager {
         let workItem = DispatchWorkItem {
             Task { @MainActor in
                 guard !AppState.shared.isVisible else {
-                    print("[SwitcherPanelManager] Idle preview trim skipped because switcher reopened: \(reason)")
+                    WLLog.switcher.error("Idle preview trim skipped because switcher reopened: \(reason)")
                     return
                 }
 
                 AppState.shared.clearPreviewImages(reason: "idle after \(reason)")
                 WindowCache.shared.clearPreviewImages(reason: "idle after \(reason)")
                 WindowPreviewService.shared.trimVolatileMemory(reason: "idle after \(reason)")
-                print("[SwitcherPanelManager] Idle preview memory trim completed after \(reason)")
+                WLLog.switcher.debug("Idle preview memory trim completed after \(reason)")
             }
         }
 
@@ -312,7 +312,7 @@ final class SwitcherPanelManager {
         preserveCurrentSelection: Bool = false
     ) {
         guard !AppState.shared.isNativeTraversalSnapshotActive else {
-            print("[SwitcherPanelManager] Deferred visible MRU reconciliation during native Cmd+Tab snapshot")
+            WLLog.switcher.debug("Deferred visible MRU reconciliation during native Cmd+Tab snapshot")
             return
         }
 
@@ -548,7 +548,7 @@ final class SwitcherPanelManager {
                 }
 
                 if !clickInsideAnyPanel {
-                    print("[SwitcherPanelManager] Click outside all panels, dismissing")
+                    WLLog.switcher.debug("Click outside all panels, dismissing")
                     NotificationCenter.default.post(name: .switcherDismissedByClickOutside, object: nil)
                     self.hide()
                 }

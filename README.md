@@ -40,6 +40,8 @@ Cmd-Tab remains the system app switcher owned by macOS and the Dock. WindowLens 
 - Input Monitoring permission for global shortcuts.
 - Screen Recording permission for window previews.
 
+WindowLens targets **macOS 26 only by design** (Liquid Glass UI and current Swift toolchain). Older macOS versions are not supported and are not on the roadmap.
+
 Grant permissions in System Settings -> Privacy & Security.
 
 ## Build From Source
@@ -53,6 +55,22 @@ cd WindowLens
 During development, you can also build and run from Xcode.
 
 Open **Settings** from the menu bar extra (⌘,) to configure modules, shortcuts, window slots, and excluded apps.
+
+## Testing
+
+```bash
+swift test
+```
+
+You can also run tests from Xcode with the WindowLens scheme (`Cmd+U`).
+
+Coverage focuses on pure logic in `WindowLens/Tests/WindowLensTests.swift` (~65 cases), including:
+
+- Fuzzy matching, preferences/shortcuts, and window usage store persistence
+- Finder window refinement and preview merge identity
+- Modifier-key tracking and related helpers
+
+Live CGEventTap and ScreenCaptureKit paths are not covered by unit tests.
 
 ## Interaction Model
 
@@ -77,6 +95,17 @@ WindowLens intentionally separates two interaction systems:
 
 - Native Cmd-Tab augmentation: passive, Dock-authoritative, preview-focused.
 - WindowLens workspace mode: active, keyboard-focused, window/workspace-oriented.
+
+```mermaid
+flowchart LR
+  KeyboardEventTap --> AppState
+  KeyboardEventTap --> WindowCache
+  WindowCache --> WindowPreviewService
+  AppState --> SwiftUIOverlay
+  WindowPreviewService --> SwiftUIOverlay
+```
+
+The SwiftUI overlay is `SwitcherView`, hosted in `SwitcherPanel`. Diagnostics use OSLog; filter by subsystem in Console.app.
 
 The native Cmd-Tab path should not consume or replace Cmd-Tab. The Dock remains responsible for app traversal and activation.
 

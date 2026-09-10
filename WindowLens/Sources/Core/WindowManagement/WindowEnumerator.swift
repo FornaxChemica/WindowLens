@@ -3,7 +3,6 @@ import AppKit
 import ApplicationServices
 
 final class WindowEnumerator {
-    private let isEnumerationDebugLoggingEnabled = false
     private var hasLoggedMissingAccessibility = false
 
     struct EnumerationOptions {
@@ -31,7 +30,7 @@ final class WindowEnumerator {
     func enumerateGroupedByApp(options: EnumerationOptions = .default) -> [ApplicationModel] {
         guard AXIsProcessTrusted() else {
             if !hasLoggedMissingAccessibility {
-                print("[WindowEnumerator] Skipping window enumeration: Accessibility is not granted")
+                WLLog.cache.error("Skipping window enumeration: Accessibility is not granted")
                 hasLoggedMissingAccessibility = true
             }
             return []
@@ -70,9 +69,9 @@ final class WindowEnumerator {
             let axWindows = (axResult == .success) ? (windowsRef as? [AXUIElement]) ?? [] : []
 
             if axResult != .success {
-                print("[WindowEnumerator] AX failed for \(name) (error: \(axResult.rawValue)), using synthetic window")
+                WLLog.cache.error("AX failed for \(name) (error: \(axResult.rawValue)), using synthetic window")
             } else if axWindows.isEmpty {
-                print("[WindowEnumerator] AX returned empty windows for \(name), using synthetic window")
+                WLLog.cache.debug("AX returned empty windows for \(name), using synthetic window")
             }
 
             var windows: [WindowInfo] = []
@@ -159,7 +158,7 @@ final class WindowEnumerator {
                         bounds: CGRect(origin: position, size: size)
                     )
                     hasReliableWindowID = false
-                    print("[WindowEnumerator][preview] missing AX CGWindowID for \(name) title=\(title ?? "untitled") axResult=\(idResult.rawValue); using pseudoID=\(finalWindowID)")
+                    WLLog.preview.debug("missing AX CGWindowID for \(name) title=\(title ?? "untitled") axResult=\(idResult.rawValue); using pseudoID=\(finalWindowID)")
                 }
 
                 // Pseudo-ID windows lack CGWindowID for space lookup; AX geometry already validated above.
@@ -999,12 +998,10 @@ final class WindowEnumerator {
         acceptedWindows: [WindowInfo],
         rejectedWindows: [String]
     ) {
-        guard isEnumerationDebugLoggingEnabled else { return }
-
         let accepted = acceptedWindows
             .map { "#\($0.axIndex.map(String.init) ?? "-") id=\($0.windowID) reliable=\($0.hasReliableWindowID) minimized=\($0.isMinimized) onScreen=\($0.isOnScreen) title=\($0.windowName ?? "untitled")" }
             .joined(separator: " | ")
         let rejected = rejectedWindows.isEmpty ? "none" : rejectedWindows.joined(separator: " | ")
-        print("[WindowEnumerator][debug] \(appName): AX=\(axWindowCount) accepted=\(acceptedWindows.count) windows=\(accepted.isEmpty ? "none" : accepted) rejected=\(rejected)")
+        WLLog.cache.debug("\(appName): AX=\(axWindowCount) accepted=\(acceptedWindows.count) windows=\(accepted.isEmpty ? "none" : accepted) rejected=\(rejected)")
     }
 }

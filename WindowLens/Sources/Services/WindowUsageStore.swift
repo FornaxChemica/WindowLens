@@ -97,7 +97,7 @@ final class WindowUsageStore {
         scheduleDebouncedSave()
 
         #if DEBUG
-        print("[WindowUsageStore] recordAccess surfaceID=\(key) records=\(records.count)")
+        WLLog.general.debug("recordAccess surfaceID=\(key) records=\(self.records.count)")
         #endif
     }
 
@@ -161,7 +161,7 @@ final class WindowUsageStore {
             let data = try JSONEncoder().encode(records)
             userDefaults.set(data, forKey: persistenceKey)
         } catch {
-            print("[WindowUsageStore] Failed to encode usage records: \(error)")
+            WLLog.general.error("Failed to encode usage records: \(error)")
         }
     }
 
@@ -174,7 +174,7 @@ final class WindowUsageStore {
         do {
             records = try JSONDecoder().decode([String: WindowUsageRecord].self, from: data)
         } catch {
-            print("[WindowUsageStore] Failed to decode usage records, starting fresh: \(error)")
+            WLLog.general.error("Failed to decode usage records, starting fresh: \(error)")
             records = [:]
             userDefaults.removeObject(forKey: persistenceKey)
         }
