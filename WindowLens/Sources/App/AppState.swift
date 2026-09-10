@@ -103,7 +103,7 @@ final class AppState: ObservableObject {
     @Published var preferences = UserPreferences.load() {
         didSet {
             handleWindowEnumerationPreferenceChange(from: oldValue)
-            if oldValue.shortcuts != preferences.shortcuts {
+            if oldValue.shortcuts != preferences.shortcuts || oldValue.modules != preferences.modules {
                 NotificationCenter.default.post(name: .shortcutsDidChange, object: nil)
             }
             if oldValue.modules.stayAwakeEnabled && !preferences.modules.stayAwakeEnabled {

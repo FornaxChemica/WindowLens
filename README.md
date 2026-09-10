@@ -18,7 +18,7 @@ Cmd-Tab remains the system app switcher owned by macOS and the Dock. WindowLens 
 - Option-Tab workspace mode for window-focused navigation.
 - Window-level selection within the active workspace surface.
 - Search-ready architecture for apps and windows.
-- **Settings window** — sidebar navigation (Features, General, Shortcuts, Excluded Apps, Window Slots, About) with light frosted-glass chrome and System Settings–style titlebar alignment.
+- **Settings window** — sidebar navigation (Features, General, Shortcuts, Excluded Apps, Window Slots, Usage Heatmap, Permissions, About) with light frosted-glass chrome and System Settings–style titlebar alignment.
 - **Window slots (1–9)** — globally jump to assigned windows; assign or clear slots from Settings.
 - **Window visit history** — back/forward across recent windows when the switcher is closed, with optional HUD feedback.
 - **Per-module toggles and shortcuts** — enable or disable Window Slots, Window History, Workspace Switcher, and Resource Monitor; customize bindings from Settings.
@@ -49,12 +49,38 @@ Grant permissions in System Settings -> Privacy & Security.
 ```bash
 git clone https://github.com/FornaxChemica/WindowLens.git
 cd WindowLens
-./build-app.sh
+./dev-relaunch.sh
 ```
 
-During development, you can also build and run from Xcode.
+That single script:
 
-Open **Settings** from the menu bar extra (⌘,) to configure modules, shortcuts, window slots, and excluded apps.
+1. Builds the **WindowLens** scheme with `xcodebuild` (Debug, Apple Development signing)
+2. Syncs the product to `/Applications/WindowLens.app`
+3. Launches it
+
+Skip the compile step when you only need a relaunch:
+
+```bash
+./dev-relaunch.sh --skip-build
+```
+
+You can still open `WindowLens.xcodeproj` in Xcode for debugging or tests (`Cmd+U`).
+
+## Testing
+
+```bash
+swift test
+```
+
+You can also run tests from Xcode with the WindowLens scheme (`Cmd+U`).
+
+Coverage focuses on pure logic in `WindowLens/Tests/WindowLensTests.swift` (~65 cases), including:
+
+- Fuzzy matching, preferences/shortcuts, and window usage store persistence
+- Finder window refinement and preview merge identity
+- Modifier-key tracking and related helpers
+
+Live CGEventTap and ScreenCaptureKit paths are not covered by unit tests.
 
 ## Testing
 

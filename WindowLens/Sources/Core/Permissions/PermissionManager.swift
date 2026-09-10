@@ -23,6 +23,11 @@ actor PermissionManager {
             inputMonitoring && accessibility && screenRecording
         }
 
+        /// Accessibility + Input Monitoring. Screen Recording is only needed for thumbnails.
+        var coreGranted: Bool {
+            inputMonitoring && accessibility
+        }
+
         var description: String {
             """
             Input Monitoring: \(inputMonitoring ? "✓" : "✗")

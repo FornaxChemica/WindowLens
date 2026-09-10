@@ -1,0 +1,31 @@
+---
+description: Agent must only edit code — never build, sign, install, or launch WindowLens
+alwaysApply: true
+---
+
+# Deploy is human-owned
+
+The agent **edits source only**. You (the developer) build and run.
+
+## Do not
+
+- Run `swift build`, `xcodebuild`, `codesign`, `open …WindowLens.app`, or install to `/Applications`
+- Modify or create ad-hoc `.app` bundles under the repo or `/Applications`
+- Call `./dev-relaunch.sh`, `killall WindowLens`, or otherwise deploy/restart the app
+- Add temporary “agent builds” or dual packaging scripts
+
+## Do
+
+- Change Swift / project / docs as requested
+- Leave verification to the developer via **Xcode build** + `./dev-relaunch.sh` (Warp)
+
+## Canonical run path
+
+```bash
+./dev-relaunch.sh
+```
+
+Builds with `xcodebuild`, syncs to `/Applications/WindowLens.app`, launches.
+`--skip-build` relaunches without compiling.
+
+There is no separate `build-app.sh`; do not reintroduce one unless explicitly asked.

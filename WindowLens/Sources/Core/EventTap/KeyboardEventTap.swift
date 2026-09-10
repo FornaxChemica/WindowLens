@@ -65,8 +65,12 @@ final class KeyboardEventTap {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+<<<<<<< HEAD
     /// Dedicated runloop so Tab key-up is never stuck behind main-thread AX/UI work.
     private var tapThread: Thread?
+=======
+    /// Runloop the tap source is registered on (main — dedicated thread delivered 0 callbacks).
+>>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
     private var tapRunLoop: CFRunLoop?
     private var healthTimer: Timer?
     private var healthTimerTarget: KeyboardEventTapHealthTarget?
@@ -127,9 +131,17 @@ final class KeyboardEventTap {
     private let activationKeyCode: UInt16 = UInt16(kVK_Tab)
     private let isCommandTabHandlingEnabled = false
     private var cachedShortcuts = ShortcutPreferences()
+    /// Never call UserPreferences.load() inside the CGEventTap callback.
+    private var cachedModules = UserPreferences.ModuleSettings()
 
     init() {
+<<<<<<< HEAD
         cachedShortcuts = UserPreferences.load().shortcuts
+=======
+        let prefs = UserPreferences.load()
+        cachedShortcuts = prefs.shortcuts
+        cachedModules = prefs.modules
+>>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
         WLLog.eventTap.debug("init")
         logStartupDiagnostics(context: "init")
         startHealthMonitoring()
@@ -271,11 +283,16 @@ final class KeyboardEventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
         if let source = runLoopSource {
+<<<<<<< HEAD
             let runLoop = tapRunLoop ?? CFRunLoopGetMain()
             CFRunLoopRemoveSource(runLoop, source, .commonModes)
             if let tapRunLoop {
                 CFRunLoopWakeUp(tapRunLoop)
             }
+=======
+            // Tap is always on the main runloop (dedicated-thread delivery was dead — 0 callbacks).
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+>>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
         }
         eventTap = nil
         runLoopSource = nil
@@ -349,6 +366,7 @@ final class KeyboardEventTap {
 
     func reloadShortcutBindings(from preferences: UserPreferences) {
         cachedShortcuts = preferences.shortcuts
+        cachedModules = preferences.modules
         if let modifier = cachedShortcuts.workspaceOpen.primaryModifier {
             setActivationModifier(modifier)
         }
@@ -457,6 +475,7 @@ final class KeyboardEventTap {
         }
 
         runLoopSource = source
+<<<<<<< HEAD
         ensureTapThread()
         guard let tapRunLoop else {
             WLLog.eventTap.fault("Event tap thread runloop unavailable")
@@ -468,6 +487,15 @@ final class KeyboardEventTap {
         WLLog.eventTap.debug("RunLoop source created; adding to dedicated EventTap thread")
         CFRunLoopAddSource(tapRunLoop, source, .commonModes)
         CFRunLoopWakeUp(tapRunLoop)
+=======
+        // Attach to the main runloop. A dedicated EventTap thread could report
+        // "installed"/enabled while delivering zero callbacks; the system then
+        // times the tap out and stalls Cmd-Tab / typing.
+        let mainLoop = CFRunLoopGetMain()
+        tapRunLoop = mainLoop
+        WLLog.eventTap.debug("RunLoop source created; adding to main runloop")
+        CFRunLoopAddSource(mainLoop, source, .commonModes)
+>>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
         CGEvent.tapEnable(tap: tap, enable: true)
         WLLog.eventTap.debug("CGEventTap enabled=\(CGEvent.tapIsEnabled(tap: tap))")
         hasLoggedFirstCallback = false
@@ -593,6 +621,7 @@ final class KeyboardEventTap {
         )
     }
 
+<<<<<<< HEAD
     private func logKeyboardEvent(type: CGEventType, keyCode: UInt16, flags: CGEventFlags, isRepeat: Bool) {
         let typeName: String
         switch type {
@@ -609,6 +638,8 @@ final class KeyboardEventTap {
         WLLog.eventTap.debug("Received key event \(typeName, privacy: .public) key=\(self.keyName(for: keyCode), privacy: .public) code=\(keyCode) flags=\(self.modifierDescription(from: flags), privacy: .public) tracker=\(self.modifierDescription(from: self.modifierTracker.currentModifierSet()), privacy: .public) repeat=\(isRepeat)")
     }
 
+=======
+>>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
     private func keyName(for keyCode: UInt16) -> String {
         switch Int(keyCode) {
         case kVK_Tab:
@@ -673,20 +704,29 @@ final class KeyboardEventTap {
             WLLog.eventTap.debug("First key event callback received type=\(type.rawValue) key=\(self.keyName(for: keyCode)) flags=\(self.modifierDescription(from: flags))")
         }
 
-        if type != .flagsChanged {
-            logKeyboardEvent(type: type, keyCode: keyCode, flags: flags, isRepeat: isRepeat)
-        }
+        // Hot path: no UserDefaults / file I/O (stalls the whole keyboard + Dock Tab).
 
         if isSystemCommandTabKeyEvent(type: type, keyCode: keyCode, flags: flags) {
-            if pendingActivation || activeActivationShortcut != nil {
-                resetShortcutState(reason: "clearing stale workspace state before Cmd+Tab pass-through")
+            if pendingActivation || activeActivationShortcut != nil || switcherVisible {
+                showSwitcherTimer?.cancel()
+                showSwitcherTimer = nil
+                pendingActivation = false
+                activeActivationShortcut = nil
+                hadInteractionSinceActivation = false
+                switcherVisible = false
+                searchModeActive = false
             }
             observeSystemCommandTabEvent(type: type, keyCode: keyCode, flags: flags, isRepeat: isRepeat)
+<<<<<<< HEAD
             // Swallow Tab autorepeat so Dock can't multi-advance from a delayed key-up
             // that looks like a hold. Intentional cycling: tap Tab repeatedly while holding Cmd.
             if type == .keyDown, isRepeat {
                 return nil
             }
+=======
+            // Pass Tab (including autorepeat) through to Dock so Cmd+Tab hold-to-cycle works.
+            // WindowLens ignores repeats in observeSystemCommandTabEvent and tracks via Dock AX.
+>>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
             return Unmanaged.passUnretained(event)
         }
 
@@ -707,7 +747,6 @@ final class KeyboardEventTap {
             let oldFlags = previousFlags
             previousFlags = flags
             modifierTracker.update(flags: flags)
-            logKeyboardEvent(type: type, keyCode: keyCode, flags: flags, isRepeat: isRepeat)
 
             if nativeCommandTabSessionActive,
                modifierTracker.wasModifierReleased(oldFlags: oldFlags, newFlags: flags, modifier: .command) {
@@ -764,7 +803,7 @@ final class KeyboardEventTap {
             }
             if isHoldingE,
                keyCode == cachedShortcuts.resourceMonitorToggle.keyCode,
-               UserPreferences.load().modules.resourceMonitorEnabled {
+               cachedModules.resourceMonitorEnabled {
                 let holdDuration = CFAbsoluteTimeGetCurrent() - eKeyDownTime
                 isHoldingE = false
                 if holdDuration < eHoldThreshold {
@@ -799,7 +838,7 @@ final class KeyboardEventTap {
 
         // Window visit history undo/redo (global, only when switcher is inactive)
         if !switcherVisible && !pendingActivation && !nativeCommandTabSessionActive && !isRepeat,
-           UserPreferences.load().modules.windowHistoryEnabled {
+           cachedModules.windowHistoryEnabled {
             if cachedShortcuts.windowHistoryBack.matches(keyCode: keyCode, flags: flags) {
                 onShortcutTriggered.send(.windowHistoryUndo)
                 return nil
@@ -811,14 +850,14 @@ final class KeyboardEventTap {
         }
 
         if !switcherVisible && !pendingActivation && !nativeCommandTabSessionActive && !isRepeat,
-           UserPreferences.load().modules.usageHeatmapEnabled,
+           cachedModules.usageHeatmapEnabled,
            cachedShortcuts.usageHeatmapOpen.matches(keyCode: keyCode, flags: flags) {
             onShortcutTriggered.send(.openUsageHeatmap)
             return nil
         }
 
         if !switcherVisible && !pendingActivation && !nativeCommandTabSessionActive && !isRepeat,
-           UserPreferences.load().modules.stayAwakeEnabled,
+           cachedModules.stayAwakeEnabled,
            cachedShortcuts.stayAwakeToggle.matches(keyCode: keyCode, flags: flags) {
             onShortcutTriggered.send(.toggleStayAwake)
             return nil
@@ -826,7 +865,7 @@ final class KeyboardEventTap {
 
         // Global window slot activation
         if !isRepeat,
-           UserPreferences.load().modules.windowSlotsEnabled,
+           cachedModules.windowSlotsEnabled,
            let slot = cachedShortcuts.matchesWindowSlotDigit(keyCode: keyCode, flags: flags) {
             if !Self.isTerminalFrontmost() {
                 onShortcutTriggered.send(.activateWindowSlot(slot))
@@ -915,7 +954,7 @@ final class KeyboardEventTap {
 
                 // E = tap to toggle monitor, hold for AI insight
                 if cachedShortcuts.resourceMonitorToggle.matches(keyCode: keyCode, flags: flags),
-                   UserPreferences.load().modules.resourceMonitorEnabled {
+                   cachedModules.resourceMonitorEnabled {
                     let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
                     if isRepeat { return nil }
                     if !isHoldingE {
@@ -930,7 +969,7 @@ final class KeyboardEventTap {
 
                 // F = toggle process grouping in resource monitor
                 if keyCode == UInt16(kVK_ANSI_F),
-                   UserPreferences.load().modules.resourceMonitorEnabled {
+                   cachedModules.resourceMonitorEnabled {
                     let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
                     if isRepeat { return nil }
                     hadInteractionSinceActivation = true
@@ -1042,7 +1081,7 @@ final class KeyboardEventTap {
         }
 
         // Check for activation shortcut only when switcher is not visible.
-        if UserPreferences.load().modules.workspaceSwitcherEnabled,
+        if cachedModules.workspaceSwitcherEnabled,
            let shortcut = matchingActivationShortcut(for: keyCode, flags: flags),
            !pendingActivation {
             WLLog.eventTap.debug("Activation started via \(shortcut.name) (switcherVisible=\(self.switcherVisible))")

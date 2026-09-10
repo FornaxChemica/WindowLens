@@ -87,7 +87,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        eventTap?.resetShortcutState(reason: "application did become active")
+        // Do not resetShortcutState here — clearing native Cmd-Tab session mid-hop
+        // makes Dock switching glitchy when a WindowLens panel briefly activates.
         Task { @MainActor in
             await refreshPermissionGate(context: "application active")
         }
@@ -99,7 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationWillResignActive(_ notification: Notification) {
-        eventTap?.resetShortcutState(reason: "application will resign active")
+        // Intentionally do not reset shortcut state on resign.
     }
 
     deinit {
@@ -120,7 +121,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func startPermissionMonitoring() {
         guard permissionMonitorTimer == nil else { return }
 
-        permissionMonitorTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        // Slow poll only to notice System Settings toggles — never steal focus on a timer.
+        permissionMonitorTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.refreshPermissionGate(context: "permission monitor")
             }
@@ -131,23 +133,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func refreshPermissionGate(context: String) async {
         let status = await PermissionManager.shared.checkStatus()
-        let previousAllGranted = lastPermissionAllGranted
-        let didTransitionToMissing = previousAllGranted == true && !status.allGranted
-        let didTransitionToGranted = previousAllGranted == false && status.allGranted
+        // Gate on core (AX + Input). Missing Screen Recording must not brick shortcuts.
+        let previousCoreGranted = lastPermissionAllGranted
+        let didTransitionToMissing = previousCoreGranted == true && !status.coreGranted
+        let didTransitionToGranted = previousCoreGranted == false && status.coreGranted
         let statusDescription = status.description
         let shouldLogStatus = context != "permission monitor"
             || didTransitionToMissing
             || didTransitionToGranted
             || lastLoggedPermissionStatusDescription != statusDescription
 
-        lastPermissionAllGranted = status.allGranted
+        lastPermissionAllGranted = status.coreGranted
 
         if shouldLogStatus {
             logLaunchDiagnostics(status: status, context: context)
             lastLoggedPermissionStatusDescription = statusDescription
         }
 
-        guard status.allGranted else {
+        guard status.coreGranted else {
             hasCompletedPermissionGate = false
 
             if didTransitionToMissing {
@@ -169,9 +172,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 if !isEventTapSuspendedForMissingInput {
                     eventTap?.suspend(reason: "Input Monitoring permission missing")
                     isEventTapSuspendedForMissingInput = true
-                } else {
-                    eventTap?.resetShortcutState(reason: "Input Monitoring permission still missing")
                 }
+                // Do not resetShortcutState on every poll — that thrashes the tap.
             } else {
                 isEventTapSuspendedForMissingInput = false
             }
@@ -181,8 +183,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
 
             closePermissionReadyWindow()
+            // Never activate from the background monitor — that steals keystrokes.
             showPermissionOnboardingWindow(
-                activate: shouldActivatePermissionWindow(context: context) || didTransitionToMissing
+                activate: shouldActivatePermissionWindow(context: context)
             )
             return
         }
@@ -202,18 +205,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func showPermissionOnboardingWindow(activate: Bool) {
-        // Always rebuild so auto-dismiss vs manual Done matches the current gate state.
-        closePermissionOnboardingWindow()
-
         // After the required gate is done, keep the window open so optional
         // privileges (lid-closed stay awake) can be granted without auto-dismiss.
         let autoDismiss = !hasCompletedPermissionGate
+
+        // Reuse a visible window — rebuilding on every poll flickers and steals focus.
+        if let existing = onboardingWindow, existing.isVisible {
+            if activate {
+                existing.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            return
+        }
+
+        closePermissionOnboardingWindow()
 
         let view = PermissionOnboardingView(autoDismissWhenReady: autoDismiss) { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let status = await PermissionManager.shared.checkStatus()
-                guard status.allGranted else {
+                guard status.coreGranted else {
                     self.closePermissionOnboardingWindow()
                     self.showPermissionOnboardingWindow(activate: true)
                     return
@@ -300,23 +311,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func proceedAfterPermissions(status: PermissionManager.Status, context: String) {
-        guard status.allGranted else {
+        guard status.coreGranted else {
             hasCompletedPermissionGate = false
             showPermissionOnboardingWindow(activate: shouldActivatePermissionWindow(context: context))
             return
         }
 
         if !hasCompletedPermissionGate {
+<<<<<<< HEAD
             WLLog.permissions.debug("Permission gate completed context=\(context)")
+=======
+            WLLog.permissions.debug(
+                "Permission gate completed (core) context=\(context) screen=\(status.screenRecording)"
+            )
+>>>>>>> 7634ffc (feat: add Permissions settings and soft core permission gate)
         }
         hasCompletedPermissionGate = true
+        closePermissionOnboardingWindow()
 
         startWindowCacheIfAccessibilityTrusted(status: status, context: context)
         WindowVisitHistory.shared.startMonitoring()
 
-        if eventTap?.isInstalled == true {
-            eventTap?.verifyOrRebuild(reason: "permissions confirmed \(context)")
-        } else {
+        // Install once if needed — avoid verifyOrRebuild on every gate pass (drops keys).
+        if eventTap?.isInstalled != true {
             eventTap?.scheduleInstall(reason: "permissions confirmed \(context)", delay: 0.5)
         }
 
@@ -431,10 +448,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 _ = Task<Void, Never> { @MainActor [weak self] in
                     guard let self else { return }
                     let status = await PermissionManager.shared.checkStatus()
-                    if status.allGranted {
+                    if status.coreGranted {
                         self.eventTap?.verifyOrRebuild(reason: "manual menu action")
                     } else {
-                        self.showPermissionOnboardingWindow(activate: true)
+                        SettingsNavigation.shared.showPermissions()
+                        self.showSettingsWindow()
                     }
                 }
             }
@@ -444,7 +462,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.showPermissionOnboardingWindow(activate: true)
+                    SettingsNavigation.shared.showPermissions()
+                    self?.showSettingsWindow()
                 }
             }
             .store(in: &cancellables)

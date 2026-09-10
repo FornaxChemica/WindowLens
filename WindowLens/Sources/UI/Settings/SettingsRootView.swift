@@ -7,6 +7,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     case excludedApps
     case windowSlots
     case usageHeatmap
+    case permissions
     case about
 
     var id: String { rawValue }
@@ -19,6 +20,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .excludedApps: return "Excluded Apps"
         case .windowSlots: return "Window Slots"
         case .usageHeatmap: return "Usage Heatmap"
+        case .permissions: return "Permissions"
         case .about: return "About"
         }
     }
@@ -31,6 +33,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .excludedApps: return "eye.slash"
         case .windowSlots: return "number.square"
         case .usageHeatmap: return "chart.bar.xaxis"
+        case .permissions: return "lock.shield"
         case .about: return "info.circle"
         }
     }
@@ -40,6 +43,10 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
 final class SettingsNavigation: ObservableObject {
     static let shared = SettingsNavigation()
     @Published var selectedTab: SettingsTab = .features
+
+    func showPermissions() {
+        selectedTab = .permissions
+    }
 }
 
 struct SettingsRootView: View {
@@ -98,6 +105,8 @@ struct SettingsRootView: View {
             WindowSlotsSettingsView()
         case .usageHeatmap:
             HeatmapSettingsView()
+        case .permissions:
+            PermissionsSettingsView()
         case .about:
             AboutView()
         }

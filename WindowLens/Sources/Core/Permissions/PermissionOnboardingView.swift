@@ -59,8 +59,8 @@ struct PermissionOnboardingView: View {
                 completeIfReady()
             }
         }
-        .onChange(of: viewModel.allGranted) { _, allGranted in
-            guard autoDismissWhenReady, allGranted else { return }
+        .onChange(of: viewModel.coreGranted) { _, coreGranted in
+            guard autoDismissWhenReady, coreGranted else { return }
             completeIfReady()
         }
     }
@@ -84,7 +84,7 @@ struct PermissionOnboardingView: View {
     }
 
     private func completeIfReady() {
-        guard autoDismissWhenReady, viewModel.allGranted, !hasCompleted else { return }
+        guard autoDismissWhenReady, viewModel.coreGranted, !hasCompleted else { return }
         hasCompleted = true
 
         Task { @MainActor in

@@ -1,12 +1,37 @@
 #!/bin/bash
+# Build (xcodebuild) + install to /Applications + launch.
+# Usage:
+#   ./dev-relaunch.sh              # build Debug, sync, launch
+#   ./dev-relaunch.sh --skip-build # relaunch last build only
+#   SKIP_BUILD=1 ./dev-relaunch.sh
 
-set -e
+set -euo pipefail
 
 APP_NAME="WindowLens"
 LEGACY_APP_NAME="BetterTabbing"
 INSTALL_APP="/Applications/WindowLens.app"
-DERIVED_DATA_DIR="${DERIVED_DATA_DIR:-$HOME/Library/Developer/Xcode/DerivedData}"
-DERIVED_APP="${DERIVED_APP:-}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+PROJECT="${PROJECT:-WindowLens.xcodeproj}"
+SCHEME="${SCHEME:-WindowLens}"
+CONFIGURATION="${CONFIGURATION:-Debug}"
+# Local derived data keeps the product path stable (no hunting Xcode's global DerivedData).
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$SCRIPT_DIR/.build/DerivedData}"
+DERIVED_APP="${DERIVED_APP:-$DERIVED_DATA_PATH/Build/Products/${CONFIGURATION}/${APP_NAME}.app}"
+
+SKIP_BUILD="${SKIP_BUILD:-0}"
+for arg in "$@"; do
+    case "$arg" in
+        --skip-build|-n) SKIP_BUILD=1 ;;
+        --help|-h)
+            echo "Usage: ./dev-relaunch.sh [--skip-build]"
+            echo "  Builds ${SCHEME} (${CONFIGURATION}) with xcodebuild, syncs to ${INSTALL_APP}, launches."
+            echo "  --skip-build  Skip xcodebuild; sync/launch existing product only."
+            exit 0
+            ;;
+    esac
+done
 
 is_runnable_app() {
     local app_path="$1"
@@ -26,53 +51,31 @@ is_runnable_app() {
     find "$app_path/Contents/MacOS" -maxdepth 1 -type f -perm -111 -print -quit 2>/dev/null | grep -q .
 }
 
-find_derived_app_named() {
-    local app_name="$1"
-    local candidate=""
-    local newest=""
-    local newest_mtime=0
-    local mtime=0
-
-    while IFS= read -r candidate; do
-        if is_runnable_app "$candidate"; then
-            mtime=$(stat -f '%m' "$candidate/Contents/MacOS" 2>/dev/null || echo 0)
-            if [ "$mtime" -ge "$newest_mtime" ]; then
-                newest_mtime="$mtime"
-                newest="$candidate"
-            fi
-        fi
-    done < <(
-        find "$DERIVED_DATA_DIR" \
-            -path "*/Index.noindex" -prune -o \
-            -path "*/Build/Products/Debug/${app_name}.app" \
-            -type d \
-            -print 2>/dev/null
-    )
-
-    if [ -n "$newest" ]; then
-        printf '%s\n' "$newest"
-        return 0
-    fi
-
-    return 1
-}
-
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Killing existing app..."
 killall "$APP_NAME" 2>/dev/null || true
 killall "$LEGACY_APP_NAME" 2>/dev/null || true
 
-if [ -z "$DERIVED_APP" ]; then
-    DERIVED_APP="$(find_derived_app_named "$APP_NAME" || true)"
+if [ "$SKIP_BUILD" != "1" ]; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Building ${SCHEME} (${CONFIGURATION})..."
+    xcodebuild \
+        -project "$PROJECT" \
+        -scheme "$SCHEME" \
+        -configuration "$CONFIGURATION" \
+        -destination 'platform=macOS,arch=arm64' \
+        -derivedDataPath "$DERIVED_DATA_PATH" \
+        build
+    echo "Build succeeded."
+else
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Skipping build (--skip-build)."
 fi
 
-if [ -z "$DERIVED_APP" ]; then
-    DERIVED_APP="$(find_derived_app_named "$LEGACY_APP_NAME" || true)"
-fi
-
-if [ -z "$DERIVED_APP" ] || ! is_runnable_app "$DERIVED_APP"; then
-    echo "Could not find a runnable ${APP_NAME}.app or ${LEGACY_APP_NAME}.app in Xcode DerivedData."
-    echo "Build the app in Xcode first, or set DERIVED_APP=/path/to/${APP_NAME}.app."
+if ! is_runnable_app "$DERIVED_APP"; then
+    echo "Could not find a runnable app at:"
+    echo "  $DERIVED_APP"
+    echo "Run without --skip-build, or set DERIVED_APP=/path/to/${APP_NAME}.app."
     exit 1
 fi
 
@@ -80,7 +83,8 @@ echo "Using build: $DERIVED_APP"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Syncing build to /Applications..."
-rsync -av --delete "$DERIVED_APP/" "$INSTALL_APP/"
+mkdir -p "$(dirname "$INSTALL_APP")"
+rsync -a --delete "$DERIVED_APP/" "$INSTALL_APP/"
 
 if ! is_runnable_app "$INSTALL_APP"; then
     echo "Installed app is missing an executable: $INSTALL_APP"

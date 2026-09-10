@@ -24,6 +24,7 @@
 		0F5061728394A5B6C7D8E9F /* WindowSlotHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F60718293A4B5C6D7E8F90 /* WindowSlotHUD.swift */; };
 		105061728394A5B6C7D8E9FA /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5 /* SettingsRootView.swift */; };
 		1161728394A5B6C7D8E9FAB /* FeaturesSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F60718293A4B5C6 /* FeaturesSettingsView.swift */; };
+		11C7D8E9FAB0C1D2E3F405 /* PermissionsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D8E9FAB0C1D2E3F40516 /* PermissionsSettingsView.swift */; };
 		11728394A5B6C7D8E9FAB0C /* DeadWindowsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C4D5E6F60718293A4B5C7 /* DeadWindowsView.swift */; };
 		118394A5B6C7D8E9FAB0C1D /* HeatmapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C5D6E7F60718293A4B5C8 /* HeatmapView.swift */; };
 		1194A5B6C7D8E9FAB0C1D2E /* HeatmapWindowConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C6D7E8F60718293A4B5C9 /* HeatmapWindowConfigurator.swift */; };
@@ -95,7 +96,6 @@
 		1C2D3E4F5061728394A5B7 /* WindowUsageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowUsageStore.swift; sourceTree = "<group>"; };
 		2B3C4D5E6F708192A3B4C5D /* WindowHistoryHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowHistoryHUD.swift; sourceTree = "<group>"; };
 		319162BA4FDF5C82AA38CAEA /* UserPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
-		370A59B59D1C745CB0846EE8 /* build-app.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "build-app.sh"; sourceTree = "<group>"; };
 		3F30A3155D9DB846F43F2B34 /* GlassBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassBackground.swift; sourceTree = "<group>"; };
 		4429A92708777E9122C51FDD /* ApplicationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationModel.swift; sourceTree = "<group>"; };
 		4E5F60718293A4B5C6D7E8F /* WindowSlotOutcome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSlotOutcome.swift; sourceTree = "<group>"; };
@@ -109,6 +109,7 @@
 		5F60718293A4B5C6D7E8F90 /* WindowSlotHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSlotHUD.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
 		B2C3D4E5F60718293A4B5C6 /* FeaturesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturesSettingsView.swift; sourceTree = "<group>"; };
+		C7D8E9FAB0C1D2E3F40516 /* PermissionsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsSettingsView.swift; sourceTree = "<group>"; };
 		B3C4D5E6F60718293A4B5C7 /* DeadWindowsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeadWindowsView.swift; sourceTree = "<group>"; };
 		B4C5D6E7F60718293A4B5C8 /* HeatmapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatmapView.swift; sourceTree = "<group>"; };
 		B5C6D7E8F60718293A4B5C9 /* HeatmapWindowConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatmapWindowConfigurator.swift; sourceTree = "<group>"; };
@@ -263,6 +264,7 @@
 			children = (
 				A1B2C3D4E5F60718293A4B5 /* SettingsRootView.swift */,
 				B2C3D4E5F60718293A4B5C6 /* FeaturesSettingsView.swift */,
+				C7D8E9FAB0C1D2E3F40516 /* PermissionsSettingsView.swift */,
 				B3C4D5E6F60718293A4B5C7 /* DeadWindowsView.swift */,
 				B4C5D6E7F60718293A4B5C8 /* HeatmapView.swift */,
 				B5C6D7E8F60718293A4B5C9 /* HeatmapWindowConfigurator.swift */,
@@ -282,7 +284,6 @@
 				BBCDD3774FE90505898EA382 /* WindowLens */,
 				FE39F65E2E0D04E61C150B84 /* Package.swift */,
 				DB98C7EC8C47A3A89E4293AF /* AppIcon.icns */,
-				370A59B59D1C745CB0846EE8 /* build-app.sh */,
 				65C7FE39C23020BCF9989E36 /* generate-icon.swift */,
 				CD49C36B2FC8CBB700E921C0 /* dev-relaunch.sh */,
 				2F3A6B1E78F896718625FF06 /* Products */,
@@ -558,6 +559,7 @@
 				0B1C2D3E4F5061728394A5B /* WindowHistoryHUD.swift in Sources */,
 				105061728394A5B6C7D8E9FA /* SettingsRootView.swift in Sources */,
 				1161728394A5B6C7D8E9FAB /* FeaturesSettingsView.swift in Sources */,
+				11C7D8E9FAB0C1D2E3F405 /* PermissionsSettingsView.swift in Sources */,
 				11728394A5B6C7D8E9FAB0C /* DeadWindowsView.swift in Sources */,
 				118394A5B6C7D8E9FAB0C1D /* HeatmapView.swift in Sources */,
 				1194A5B6C7D8E9FAB0C1D2E /* HeatmapWindowConfigurator.swift in Sources */,

@@ -1,5 +1,8 @@
 .DS_Store
-.cursor/
+# Cursor local/state; keep committed project rules
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 
 # SwiftPM / Xcode build outputs
 .build/

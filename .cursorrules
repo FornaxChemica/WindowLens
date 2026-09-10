@@ -1,0 +1,21 @@
+# WindowLens — agent rules
+
+## Deploy is human-owned
+
+The agent edits **source only**. Do not build, sign, install, or launch WindowLens.
+
+Forbidden unless the user explicitly asks in that message:
+- `swift build`, `xcodebuild`, `codesign`
+- Creating/updating `.app` bundles or copying to `/Applications`
+- Running `./dev-relaunch.sh`, `open …WindowLens.app`, `killall WindowLens`
+
+## Canonical run path (developer)
+
+```bash
+./dev-relaunch.sh
+```
+
+That builds with `xcodebuild`, syncs to `/Applications/WindowLens.app`, and launches.
+Use `./dev-relaunch.sh --skip-build` to relaunch without compiling.
+
+Do not reintroduce `build-app.sh` unless explicitly requested. One script is enough: `dev-relaunch.sh`.

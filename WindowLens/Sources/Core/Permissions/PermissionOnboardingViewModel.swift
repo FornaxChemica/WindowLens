@@ -29,6 +29,21 @@ final class PermissionOnboardingViewModel: ObservableObject {
         items.allSatisfy { $0.state == .granted }
     }
 
+    /// Accessibility + Input Monitoring — enough to dismiss the launch gate.
+    var coreGranted: Bool {
+        items
+            .filter { $0.permission != .screenRecording }
+            .allSatisfy { $0.state == .granted }
+    }
+
+    var grantedCount: Int {
+        items.filter { $0.state == .granted }.count
+    }
+
+    var requiredCount: Int {
+        items.count
+    }
+
     init(manager: PermissionManager = .shared) {
         self.manager = manager
         self.items = [
@@ -49,7 +64,7 @@ final class PermissionOnboardingViewModel: ObservableObject {
             PermissionItem(
                 permission: .screenRecording,
                 title: "Screen Recording",
-                description: "Lets WindowLens render window thumbnails.",
+                description: "Needed for window thumbnails (optional for core switching).",
                 systemImage: "rectangle.on.rectangle",
                 state: .idle
             )
