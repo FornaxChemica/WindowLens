@@ -520,16 +520,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 // Dock tears down/recreates AXProcessSwitcherList during hopping and on
-                // dismiss (Escape). Keep rediscovering while hopping; if the list never
-                // returns while Cmd is held, treat it as cancel (Escape).
-                if self.isNativeCommandTabSessionActive {
-                    let commandDown = NSEvent.modifierFlags.contains(.command)
+                // dismiss (Escape / Command release).
+                guard self.isNativeCommandTabSessionActive else { return }
+
+                let commandDown = NSEvent.modifierFlags.contains(.command)
+                if commandDown {
+                    // Mid-hop rebuild or Escape while Cmd held — rediscover; cancel if gone.
                     self.dockProcessSwitcherObserver.start()
-                    if commandDown {
-                        self.scheduleNativeSwitcherGoneCancelIfNeeded()
-                    }
+                    self.scheduleNativeSwitcherGoneCancelIfNeeded()
                     return
                 }
+
+                // Command already up: system switcher is done — drop our preview now.
+                self.eventTap?.cancelNativeCommandTabSessionFromApp()
+                self.endNativeCommandTabSession(applySelectedWindow: true)
             }
         }
 
@@ -1385,11 +1389,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         nativeWindowSelectionWasAdjusted = false
         lastDockSelectionKey = nil
         dockProcessSwitcherObserver.stop()
+        // Hide first so reconcile work can't leave the preview on screen.
+        panelManager.hide()
+        eventTap?.setSwitcherVisible(false)
         if applySelectedWindow {
             reconcileNativeCommandTabRelease()
         }
-        panelManager.hide()
-        eventTap?.setSwitcherVisible(false)
 
         if let selectedWindow {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {

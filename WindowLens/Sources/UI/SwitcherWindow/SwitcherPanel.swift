@@ -697,6 +697,16 @@ final class SwitcherPanel: NSPanel {
         }
 
         hostingView?.layer?.removeAnimation(forKey: "switcherScaleIn")
+        hostingView?.layer?.removeAnimation(forKey: "switcherScaleOut")
+
+        // Native Cmd+Tab preview should vanish with the system switcher — no fade linger.
+        if presentationMode == .nativePreview {
+            alphaValue = 0
+            orderOut(nil)
+            hostingView?.layer?.setAffineTransform(.identity)
+            return
+        }
+
         let scaleAnimation = CABasicAnimation(keyPath: "transform.scale")
         scaleAnimation.fromValue = 1.0
         scaleAnimation.toValue = 0.985

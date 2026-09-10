@@ -75,9 +75,9 @@ final class KeyboardEventTap {
     private var searchingWithQuery = false
     private var nativeCommandTabSessionActive = false
     private var pendingNativeSessionEndWorkItem: DispatchWorkItem?
-    // Fast Cmd+Tab re-presses often land ~100–250ms after release. Ending at 80ms
-    // blanked the preview before the next hop could cancel; keep the session warm.
-    private let nativeSessionEndDebounceSeconds: TimeInterval = 0.28
+    // Short debounce only filters flagsChanged blips; Dock-destroy ends the session
+    // immediately when Command is already up so the preview doesn't linger.
+    private let nativeSessionEndDebounceSeconds: TimeInterval = 0.08
     private var callbackCount = 0
     private var hasLoggedFirstCallback = false
     private var hasLoggedMissingInputMonitoringForHealth = false
@@ -542,6 +542,7 @@ final class KeyboardEventTap {
         cancelPendingNativeSessionEnd()
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
+            self.pendingNativeSessionEndWorkItem = nil
             // Live modifier check — ignore transient flagsChanged blips while Cmd is still held.
             if NSEvent.modifierFlags.contains(.command) {
                 return
