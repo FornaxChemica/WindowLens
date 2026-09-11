@@ -189,9 +189,27 @@ final class WindowEnumerator {
 
             let icon = app.icon ?? NSImage(named: NSImage.applicationIconName) ?? NSImage()
 
-            // If no windows found through AX, create a windowless placeholder so the
-            // switcher shows "No Windows" instead of a blank preview card.
-            if windows.isEmpty && axWindows.isEmpty {
+            // AX often omits fullscreen / other-Space windows (Electron/Cursor). When the
+            // user opts into all Spaces, supplement from CGWindowList (no onScreenOnly).
+            if options.includeAllSpaces {
+                let before = windows.count
+                Self.appendCGDiscoveredWindows(
+                    to: &windows,
+                    pid: pid,
+                    bundleIdentifier: bundleIdentifier,
+                    ownerName: name,
+                    options: options,
+                    currentSpaceWindowIDs: currentSpaceWindowIDs
+                )
+                let added = windows.count - before
+                if added > 0 {
+                    rejectedWindows.append("cg-supplement +\(added)")
+                }
+            }
+
+            // If still nothing, create a windowless placeholder so the switcher shows
+            // "No Windows" instead of a blank preview card.
+            if windows.isEmpty {
                 let windowTitle = "No Windows"
                 let syntheticWindow = WindowInfo(
                     windowID: PreviewIdentity.pseudoWindowID(
@@ -222,12 +240,18 @@ final class WindowEnumerator {
             let cgWindowNamesByID = bundleIdentifier == Self.finderBundleIdentifier
                 ? Self.cgWindowNamesByID(forOwnerPID: pid)
                 : nil
-            let refinedWindows = Self.refinedWindowsForApplication(
-                windows,
-                bundleIdentifier: bundleIdentifier,
-                visibleCGWindowIDsForOwner: visibleCGWindowIDs,
-                cgWindowNamesByID: cgWindowNamesByID
-            )
+            let refinedWindows: [WindowInfo] = {
+                let refined = Self.refinedWindowsForApplication(
+                    windows,
+                    bundleIdentifier: bundleIdentifier,
+                    visibleCGWindowIDsForOwner: visibleCGWindowIDs,
+                    cgWindowNamesByID: cgWindowNamesByID
+                )
+                // Match Mission Control left→right order when listing all Spaces
+                // (e.g. WindowLens → Humanizer → .env.local instead of CG z-order).
+                guard options.includeAllSpaces, refined.count > 1 else { return refined }
+                return SpaceMissionOrder.sortedBySpaceOrder(refined) { $0.windowID }
+            }()
 
             guard !refinedWindows.isEmpty else {
                 continue
@@ -992,6 +1016,52 @@ final class WindowEnumerator {
         }
     }
 
+    /// Merge real layer-0 CG windows that AX did not return (typical for fullscreen
+    /// Electron windows on other Spaces). Only used when `includeAllSpaces` is on.
+    private static func appendCGDiscoveredWindows(
+        to windows: inout [WindowInfo],
+        pid: pid_t,
+        bundleIdentifier: String,
+        ownerName: String,
+        options: EnumerationOptions,
+        currentSpaceWindowIDs: Set<CGWindowID>?
+    ) {
+        let existingIDs = Set(windows.filter(\.hasReliableWindowID).map(\.windowID))
+        let candidates = allLayerZeroWindows(forOwnerPID: pid)
+
+        for candidate in candidates {
+            guard !existingIDs.contains(candidate.windowID) else { continue }
+
+            // Skip unnamed chrome / strips (Cursor logs: 1512x33 bars, 64x64 ornaments).
+            // Real editor windows have a title and normal content size.
+            let name = candidate.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            guard candidate.width >= options.minimumWidth,
+                  candidate.height >= options.minimumHeight else { continue }
+            // Title-bar-sized surfaces still clear 50pt; require a real content height.
+            guard candidate.height >= 100 else { continue }
+
+            let isOnCurrentSpace = currentSpaceWindowIDs?.contains(candidate.windowID) ?? false
+            windows.append(
+                WindowInfo(
+                    windowID: candidate.windowID,
+                    ownerPID: pid,
+                    ownerBundleIdentifier: bundleIdentifier,
+                    axIndex: nil,
+                    ownerName: ownerName,
+                    windowName: name,
+                    bounds: CGRect(x: 0, y: 0, width: candidate.width, height: candidate.height),
+                    isOnScreen: isOnCurrentSpace,
+                    isMinimized: false,
+                    isHidden: false,
+                    isMain: false,
+                    spaceID: nil,
+                    hasReliableWindowID: true
+                )
+            )
+        }
+    }
+
     private func logInventory(
         appName: String,
         axWindowCount: Int,
@@ -1003,5 +1073,44 @@ final class WindowEnumerator {
             .joined(separator: " | ")
         let rejected = rejectedWindows.isEmpty ? "none" : rejectedWindows.joined(separator: " | ")
         WLLog.cache.debug("\(appName): AX=\(axWindowCount) accepted=\(acceptedWindows.count) windows=\(accepted.isEmpty ? "none" : accepted) rejected=\(rejected)")
+    }
+
+    private struct CGWindowSnapshot {
+        let windowID: CGWindowID
+        let name: String
+        let width: CGFloat
+        let height: CGFloat
+    }
+
+    /// All layer-0 windows for a PID across Spaces (no onScreenOnly).
+    private static func allLayerZeroWindows(forOwnerPID pid: pid_t) -> [CGWindowSnapshot] {
+        guard let windowList = CGWindowListCopyWindowInfo(
+            [.excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]] else {
+            return []
+        }
+
+        return windowList.compactMap { info in
+            guard let ownerPID = info[kCGWindowOwnerPID as String] as? Int32,
+                  ownerPID == pid,
+                  let number = info[kCGWindowNumber as String] as? NSNumber else {
+                return nil
+            }
+            let layer = info[kCGWindowLayer as String] as? Int ?? 0
+            guard layer == 0 else { return nil }
+            if let alpha = info[kCGWindowAlpha as String] as? CGFloat, alpha < 0.05 {
+                return nil
+            }
+            let bounds = info[kCGWindowBounds as String] as? [String: Any]
+            let width = bounds?["Width"] as? CGFloat ?? 0
+            let height = bounds?["Height"] as? CGFloat ?? 0
+            return CGWindowSnapshot(
+                windowID: CGWindowID(number.uint32Value),
+                name: info[kCGWindowName as String] as? String ?? "",
+                width: width,
+                height: height
+            )
+        }
     }
 }

@@ -126,6 +126,27 @@ final class WindowSwitcher: @unchecked Sendable {
         }
 
         let axWindows = AXWindowHelper.getOrderedAXWindows(for: app.pid)
+        let targetingKnownCGWindow = window.previewIdentity.hasReliableCGWindowID && window.windowID != 0
+
+        // Strategy 1: Match by CGWindowID when AX currently exposes it
+        if targetingKnownCGWindow,
+           let axWindow = AXWindowHelper.getAXWindow(for: window.windowID, pid: app.pid) {
+            WLLog.switcher.debug("Found window by ID \(window.windowID)")
+            raiseAndActivate(axWindow: axWindow, window: window, runningApp: runningApp, app: app, windowIndex: windowIndex)
+            return
+        }
+
+        // Off-Space / fullscreen windows often missing from AX until their Space is active.
+        // Do NOT open a new window for a known CG target — activate and retry AX discovery.
+        if targetingKnownCGWindow {
+            focusOffSpaceWindow(
+                window: window,
+                in: app,
+                runningApp: runningApp,
+                windowIndex: windowIndex
+            )
+            return
+        }
 
         // If app has no windows, open a new one instead of trying to switch
         if axWindows.isEmpty, let bundleURL = runningApp.bundleURL {
@@ -142,15 +163,6 @@ final class WindowSwitcher: @unchecked Sendable {
                 }
             }
             WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
-            return
-        }
-
-        // Strategy 1: Match by CGWindowID when available (stable across AX ordering differences)
-        if window.previewIdentity.hasReliableCGWindowID,
-           window.windowID != 0,
-           let axWindow = AXWindowHelper.getAXWindow(for: window.windowID, pid: app.pid) {
-            WLLog.switcher.debug("Found window by ID \(window.windowID)")
-            raiseAndActivate(axWindow: axWindow, window: window, runningApp: runningApp, app: app, windowIndex: windowIndex)
             return
         }
 
@@ -202,6 +214,121 @@ final class WindowSwitcher: @unchecked Sendable {
         if activated {
             WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
             recordWindowVisit(app: app, window: window, windowIndex: windowIndex)
+        }
+    }
+
+    /// Activate an app whose target window lives on another Space (AX empty / incomplete).
+    /// CGS Space hop + SLPS focus-by-CGWindowID. Plain `activate()` only restores the
+    /// app's current-Space window.
+    private func focusOffSpaceWindow(
+        window: WindowModel,
+        in app: ApplicationModel,
+        runningApp: NSRunningApplication,
+        windowIndex: Int?
+    ) {
+        WLLog.switcher.debug(
+            "Off-space focus attempt id=\(window.windowID) title=\(window.title, privacy: .public) app=\(app.name, privacy: .public)"
+        )
+
+        WindowFocusBridge.focusWindow(pid: app.pid, windowID: window.windowID) { [weak self] _ in
+            guard let self else { return }
+
+            // Do NOT call runningApp.activate() — snaps back to the current-Space window.
+            if self.raiseOffSpaceIfAXAvailable(
+                window: window,
+                in: app,
+                runningApp: runningApp,
+                windowIndex: windowIndex
+            ) {
+                return
+            }
+
+            self.scheduleOffSpaceFocusRetry(
+                window: window,
+                app: app,
+                runningApp: runningApp,
+                windowIndex: windowIndex,
+                attempt: 1,
+                maxAttempts: 8,
+                slpsAlreadyTried: true
+            )
+        }
+    }
+
+    /// AX raise only (no `NSRunningApplication.activate`) so we don't undo the Space hop.
+    private func raiseOffSpaceIfAXAvailable(
+        window: WindowModel,
+        in app: ApplicationModel,
+        runningApp: NSRunningApplication,
+        windowIndex: Int?
+    ) -> Bool {
+        guard let axWindow = AXWindowHelper.getAXWindow(for: window.windowID, pid: app.pid) else {
+            return false
+        }
+
+        if window.isMinimized {
+            AXUIElementSetAttributeValue(axWindow, kAXMinimizedAttribute as CFString, false as CFTypeRef)
+        }
+        AXUIElementPerformAction(axWindow, kAXRaiseAction as CFString)
+        let axApp = AXUIElementCreateApplication(app.pid)
+        AXUIElementSetAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, axWindow)
+
+        WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
+        recordWindowVisit(app: app, window: window, windowIndex: windowIndex)
+        _ = runningApp
+        return true
+    }
+
+    private func raiseIfAXAvailable(
+        window: WindowModel,
+        in app: ApplicationModel,
+        runningApp: NSRunningApplication,
+        windowIndex: Int?
+    ) -> Bool {
+        raiseOffSpaceIfAXAvailable(
+            window: window,
+            in: app,
+            runningApp: runningApp,
+            windowIndex: windowIndex
+        )
+    }
+
+    private func scheduleOffSpaceFocusRetry(
+        window: WindowModel,
+        app: ApplicationModel,
+        runningApp: NSRunningApplication,
+        windowIndex: Int?,
+        attempt: Int,
+        maxAttempts: Int,
+        slpsAlreadyTried: Bool
+    ) {
+        let delay = 0.08 * Double(attempt)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            if self.raiseIfAXAvailable(window: window, in: app, runningApp: runningApp, windowIndex: windowIndex) {
+                return
+            }
+            if attempt == 3 || attempt == 6 {
+                // Re-assert SLPS only — Space should already be correct after CGS hop.
+                _ = WindowFocusBridge.focusWindowOnCurrentSpace(pid: app.pid, windowID: window.windowID)
+            }
+            if attempt >= maxAttempts {
+                WLLog.switcher.error(
+                    "Off-space focus finished id=\(window.windowID) title=\(window.title, privacy: .public) (AX raise optional)"
+                )
+                WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
+                self.recordWindowVisit(app: app, window: window, windowIndex: windowIndex)
+                return
+            }
+            self.scheduleOffSpaceFocusRetry(
+                window: window,
+                app: app,
+                runningApp: runningApp,
+                windowIndex: windowIndex,
+                attempt: attempt + 1,
+                maxAttempts: maxAttempts,
+                slpsAlreadyTried: slpsAlreadyTried
+            )
         }
     }
 

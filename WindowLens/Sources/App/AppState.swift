@@ -448,13 +448,7 @@ final class AppState: ObservableObject {
             return
         }
 
-        if let firstRealIndex = mergedWindows.indices.first(where: { index in
-            !mergedWindows[index].isWindowlessPlaceholder
-        }) {
-            selectedWindowIndex = firstRealIndex
-        } else {
-            selectedWindowIndex = 0
-        }
+        selectedWindowIndex = preferredNativeWindowIndex(in: updatedApp)
     }
 
     private func requestWorkspacePreviews(for app: ApplicationModel) {
@@ -570,13 +564,15 @@ final class AppState: ObservableObject {
             return
         }
 
-        if let firstRealIndex = mergedWindows.indices.first(where: { index in
-            !mergedWindows[index].isWindowlessPlaceholder
-        }) {
-            selectedWindowIndex = firstRealIndex
-        } else {
-            selectedWindowIndex = 0
-        }
+        let refreshedApp = ApplicationModel(
+            pid: normalizedFresh.pid,
+            bundleIdentifier: normalizedFresh.bundleIdentifier,
+            name: normalizedFresh.name,
+            icon: normalizedFresh.icon,
+            windows: mergedWindows,
+            isActive: normalizedFresh.isActive
+        )
+        selectedWindowIndex = preferredNativeWindowIndex(in: refreshedApp)
     }
 
     private func nativeWindowListNeedsRefresh(existing: [WindowModel], merged: [WindowModel]) -> Bool {
@@ -682,9 +678,44 @@ final class AppState: ObservableObject {
         hasNativeSelection = true
         if previousSelectedAppPID != selectedApp?.pid {
             advanceNativeSelectionGeneration(clearAnchor: false)
-            selectedWindowIndex = 0
+            selectedWindowIndex = preferredNativeWindowIndex(in: applications[index])
         }
         return true
+    }
+
+    /// Prefer the window Dock will activate (last focused), not AX/CG list order.
+    func preferredNativeWindowIndex(in app: ApplicationModel) -> Int {
+        let realIndices = app.windows.indices.filter { !app.windows[$0].isWindowlessPlaceholder }
+        guard !realIndices.isEmpty else { return 0 }
+
+        if let visitIndex = WindowVisitHistory.shared.preferredWindowIndex(in: app),
+           realIndices.contains(visitIndex) {
+            return visitIndex
+        }
+
+        if let focused = AXWindowHelper.focusedWindowSnapshot(for: app.pid) {
+            if focused.hasReliableWindowID,
+               let index = app.windows.firstIndex(where: {
+                   !$0.isWindowlessPlaceholder
+                       && $0.previewIdentity.hasReliableCGWindowID
+                       && $0.windowID == focused.windowID
+               }) {
+                return index
+            }
+            let focusedTitle = focused.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !focusedTitle.isEmpty,
+               let index = app.windows.firstIndex(where: {
+                   !$0.isWindowlessPlaceholder && $0.title == focusedTitle
+               }) {
+                return index
+            }
+        }
+
+        if let onScreen = realIndices.first(where: { app.windows[$0].isOnScreen }) {
+            return onScreen
+        }
+
+        return realIndices[0]
     }
 
     func selectedNativeWindowSelection() -> (app: ApplicationModel, window: WindowModel, index: Int)? {

@@ -184,6 +184,40 @@ final class WindowVisitHistory: ObservableObject {
         )
     }
 
+    /// Window Dock/Cmd-Tab is most likely to activate — last focused visit for this app.
+    func preferredWindowIndex(in app: ApplicationModel) -> Int? {
+        let candidates: [WindowVisit] = {
+            var list: [WindowVisit] = []
+            if let current { list.append(current) }
+            list.append(contentsOf: past.reversed())
+            return list
+        }()
+
+        for visit in candidates where visit.pid == app.pid
+            || (!visit.bundleIdentifier.isEmpty && visit.bundleIdentifier == app.bundleIdentifier) {
+            if let index = app.windows.firstIndex(where: {
+                !$0.isWindowlessPlaceholder && $0.previewIdentity.matches(visit.previewIdentity)
+            }) {
+                return index
+            }
+            if visit.windowID != 0,
+               let index = app.windows.firstIndex(where: {
+                   !$0.isWindowlessPlaceholder
+                       && $0.previewIdentity.hasReliableCGWindowID
+                       && $0.windowID == visit.windowID
+               }) {
+                return index
+            }
+            if !visit.windowTitle.isEmpty,
+               let index = app.windows.firstIndex(where: {
+                   !$0.isWindowlessPlaceholder && $0.title == visit.windowTitle
+               }) {
+                return index
+            }
+        }
+        return nil
+    }
+
     @discardableResult
     func undo() -> WindowHistoryOutcome {
         guard !past.isEmpty else {

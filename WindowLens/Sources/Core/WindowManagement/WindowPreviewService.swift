@@ -309,7 +309,11 @@ final class WindowPreviewService: @unchecked Sendable {
                         appName: request.appName
                     ) {
                         WLLog.preview.debug("rejected preview AX id=\(request.windowID) SC id=\(window.windowID) reason=\(rejectionReason) metrics=\(quality.debugSummary) title=\(request.title)")
-                        if let cachedImage {
+                        // Don't resurrect a similarly-broken cached half-panel frame.
+                        let cachedAlsoBad = cachedQuality.map {
+                            Self.previewRejectionReason(quality: $0, cachedQuality: nil, appName: request.appName) != nil
+                        } ?? true
+                        if let cachedImage, !cachedAlsoBad {
                             WLLog.preview.debug("posting cached preview after rejected capture id=\(request.windowID) title=\(request.title) cachedMetrics=\(cachedQuality?.debugSummary ?? "unknown")")
                             postPreview(cachedImage, for: request)
                         }
@@ -624,7 +628,9 @@ final class WindowPreviewService: @unchecked Sendable {
         configuration.width = outputSize.width
         configuration.height = outputSize.height
         configuration.ignoreShadows = true
-        configuration.includeChildWindows = true
+        // Electron (Cursor) often composites a blank child surface that shows up as a
+        // solid white half-panel when included — capture the top-level window only.
+        configuration.includeChildWindows = false
         configuration.showsCursor = false
 
         let output = try await SCScreenshotManager.captureScreenshot(
@@ -648,17 +654,20 @@ final class WindowPreviewService: @unchecked Sendable {
         let transparentPixelRatio: Double
         let averageAlpha: Double
         let edgeScore: Double
+        /// Absolute difference between left-half and right-half white ratios (0…1).
+        let whiteAsymmetry: Double
 
         var score: Double {
             let structure = min(1.0, variance * 42 + edgeScore * 9)
             let solidSurfacePenalty = max(whitePixelRatio, blackPixelRatio) * 0.18
             let alphaPenalty = transparentPixelRatio * 0.32
-            return max(0.0, min(1.0, structure + 0.08 - solidSurfacePenalty - alphaPenalty))
+            let halfPanelPenalty = whiteAsymmetry > 0.35 ? whiteAsymmetry * 0.22 : 0
+            return max(0.0, min(1.0, structure + 0.08 - solidSurfacePenalty - alphaPenalty - halfPanelPenalty))
         }
 
         var debugSummary: String {
             String(
-                format: "luma=%.3f var=%.6f white=%.2f black=%.2f transparent=%.2f alpha=%.3f edge=%.4f score=%.3f",
+                format: "luma=%.3f var=%.6f white=%.2f black=%.2f transparent=%.2f alpha=%.3f edge=%.4f asym=%.2f score=%.3f",
                 averageLuma,
                 variance,
                 whitePixelRatio,
@@ -666,6 +675,7 @@ final class WindowPreviewService: @unchecked Sendable {
                 transparentPixelRatio,
                 averageAlpha,
                 edgeScore,
+                whiteAsymmetry,
                 score
             )
         }
@@ -681,7 +691,8 @@ final class WindowPreviewService: @unchecked Sendable {
                 blackPixelRatio: 0,
                 transparentPixelRatio: 1,
                 averageAlpha: 0,
-                edgeScore: 0
+                edgeScore: 0,
+                whiteAsymmetry: 0
             )
         }
 
@@ -708,7 +719,8 @@ final class WindowPreviewService: @unchecked Sendable {
                 blackPixelRatio: 1,
                 transparentPixelRatio: 1,
                 averageAlpha: 0,
-                edgeScore: 0
+                edgeScore: 0,
+                whiteAsymmetry: 0
             )
         }
 
@@ -722,22 +734,39 @@ final class WindowPreviewService: @unchecked Sendable {
         var whitePixels = 0
         var blackPixels = 0
         var transparentPixels = 0
+        var leftWhite = 0
+        var rightWhite = 0
+        var leftCount = 0
+        var rightCount = 0
+        let midX = sampleWidth / 2
 
-        for index in stride(from: 0, to: pixels.count, by: bytesPerPixel) {
-            let red = Double(pixels[index]) / 255.0
-            let green = Double(pixels[index + 1]) / 255.0
-            let blue = Double(pixels[index + 2]) / 255.0
-            let alpha = Double(pixels[index + 3]) / 255.0
-            let luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-            lumaValues.append(luma)
-            alphaTotal += alpha
+        for y in 0..<sampleHeight {
+            for x in 0..<sampleWidth {
+                let byteIndex = (y * sampleWidth + x) * bytesPerPixel
+                let red = Double(pixels[byteIndex]) / 255.0
+                let green = Double(pixels[byteIndex + 1]) / 255.0
+                let blue = Double(pixels[byteIndex + 2]) / 255.0
+                let alpha = Double(pixels[byteIndex + 3]) / 255.0
+                let luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+                lumaValues.append(luma)
+                alphaTotal += alpha
 
-            if alpha < 0.05 {
-                transparentPixels += 1
-            } else if luma > 0.94 {
-                whitePixels += 1
-            } else if luma < 0.06 {
-                blackPixels += 1
+                let isWhite = alpha >= 0.05 && luma > 0.94
+                if alpha < 0.05 {
+                    transparentPixels += 1
+                } else if isWhite {
+                    whitePixels += 1
+                } else if luma < 0.06 {
+                    blackPixels += 1
+                }
+
+                if x < midX {
+                    leftCount += 1
+                    if isWhite { leftWhite += 1 }
+                } else {
+                    rightCount += 1
+                    if isWhite { rightWhite += 1 }
+                }
             }
         }
 
@@ -758,6 +787,8 @@ final class WindowPreviewService: @unchecked Sendable {
             }
         }
 
+        let leftWhiteRatio = leftCount == 0 ? 0 : Double(leftWhite) / Double(leftCount)
+        let rightWhiteRatio = rightCount == 0 ? 0 : Double(rightWhite) / Double(rightCount)
         let averageAlpha = alphaTotal / Double(pixelCount)
         let averageLuma = lumaValues.reduce(0, +) / Double(pixelCount)
         let variance = lumaValues.reduce(0.0) { partial, luma in
@@ -772,7 +803,8 @@ final class WindowPreviewService: @unchecked Sendable {
             blackPixelRatio: Double(blackPixels) / Double(pixelCount),
             transparentPixelRatio: Double(transparentPixels) / Double(pixelCount),
             averageAlpha: averageAlpha,
-            edgeScore: edgeCount == 0 ? 0 : edgeTotal / Double(edgeCount)
+            edgeScore: edgeCount == 0 ? 0 : edgeTotal / Double(edgeCount),
+            whiteAsymmetry: abs(leftWhiteRatio - rightWhiteRatio)
         )
     }
 
@@ -788,6 +820,11 @@ final class WindowPreviewService: @unchecked Sendable {
 
         if quality.averageAlpha < 0.04 || quality.transparentPixelRatio > 0.92 {
             return String(format: "transparent alpha=%.3f transparent=%.2f", quality.averageAlpha, quality.transparentPixelRatio)
+        }
+
+        // Cursor/Electron sometimes composites a blank child into one half of the frame.
+        if quality.whiteAsymmetry > 0.38, max(quality.whitePixelRatio, 1 - quality.whitePixelRatio) > 0.28 {
+            return String(format: "half-panel-white asym=%.2f white=%.2f", quality.whiteAsymmetry, quality.whitePixelRatio)
         }
 
         if quality.whitePixelRatio > whiteRatioThreshold && quality.edgeScore < (isFinder ? 0.030 : 0.018) {

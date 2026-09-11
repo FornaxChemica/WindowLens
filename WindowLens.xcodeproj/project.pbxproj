@@ -62,6 +62,8 @@
 		AF0AFD2C17472D0530CE75E3 /* KeyboardEventTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = D823A03FC81EF1179E0D8BA9 /* KeyboardEventTap.swift */; };
 		B1E79636147A9890613055F6 /* WindowListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520A3F505409ED23ED5C22A9 /* WindowListView.swift */; };
 		C3610C149F5507A74D22654F /* AXWindowHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C9A605EE7A5A11BC7D76F8A /* AXWindowHelper.swift */; };
+		WF0C0B51D6E2F40100A1B2C3 /* WindowFocusBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = WF0C0B50D6E2F40100A1B2C3 /* WindowFocusBridge.swift */; };
+		WF0C0B55D6E2F40100A1B2C3 /* SpaceMissionOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = WF0C0B54D6E2F40100A1B2C3 /* SpaceMissionOrder.swift */; };
 		C915A37C47AD4E15AF2E7B05 /* ResourceMonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B313704DC040E4FAEFE403 /* ResourceMonitorView.swift */; };
 		CD49C36D2FC8E30900E921C0 /* DockProcessSwitcherObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD49C36C2FC8E30900E921C0 /* DockProcessSwitcherObserver.swift */; };
 		CD49C36F2FC8F89E00E921C0 /* PreviewIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD49C36E2FC8F89E00E921C0 /* PreviewIdentity.swift */; };
@@ -103,6 +105,8 @@
 		44D5452060360EC52161C078 /* WindowLens.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WindowLens.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		45B0C675B8CD00748D4C339F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		4C9A605EE7A5A11BC7D76F8A /* AXWindowHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXWindowHelper.swift; sourceTree = "<group>"; };
+		WF0C0B50D6E2F40100A1B2C3 /* WindowFocusBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFocusBridge.swift; sourceTree = "<group>"; };
+		WF0C0B54D6E2F40100A1B2C3 /* SpaceMissionOrder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceMissionOrder.swift; sourceTree = "<group>"; };
 		520A3F505409ED23ED5C22A9 /* WindowListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowListView.swift; sourceTree = "<group>"; };
 		57D4165D0E9E57A814445FBA /* WindowPreviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowPreviewService.swift; sourceTree = "<group>"; };
 		5944484C670B2047C9756146 /* WindowLensApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowLensApp.swift; sourceTree = "<group>"; };
@@ -304,6 +308,8 @@
 			isa = PBXGroup;
 			children = (
 				4C9A605EE7A5A11BC7D76F8A /* AXWindowHelper.swift */,
+				WF0C0B54D6E2F40100A1B2C3 /* SpaceMissionOrder.swift */,
+				WF0C0B50D6E2F40100A1B2C3 /* WindowFocusBridge.swift */,
 				CD49C36C2FC8E30900E921C0 /* DockProcessSwitcherObserver.swift */,
 			);
 			path = Accessibility;
@@ -537,6 +543,8 @@
 				FCBE066DB7D0E9CD8C45D201 /* AppState.swift in Sources */,
 				774E5EC3EB80A43B0E8FABB2 /* WindowLensApp.swift in Sources */,
 				C3610C149F5507A74D22654F /* AXWindowHelper.swift in Sources */,
+				WF0C0B55D6E2F40100A1B2C3 /* SpaceMissionOrder.swift in Sources */,
+				WF0C0B51D6E2F40100A1B2C3 /* WindowFocusBridge.swift in Sources */,
 				AF0AFD2C17472D0530CE75E3 /* KeyboardEventTap.swift in Sources */,
 				634377283106F541F1F85290 /* ModifierKeyTracker.swift in Sources */,
 				CD49C3712FCA149400E921C0 /* PermissionOnboardingViewModel.swift in Sources */,

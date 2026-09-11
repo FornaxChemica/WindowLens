@@ -382,11 +382,12 @@ final class WindowCache: @unchecked Sendable {
 
     private func enumerationOptions(includeAllSpacesOverride: Bool? = nil) -> WindowEnumerator.EnumerationOptions {
         let preferences = currentPreferences()
-        return WindowEnumerator.EnumerationOptions(
+        let options = WindowEnumerator.EnumerationOptions(
             includeMinimized: preferences.showMinimizedWindows,
             includeAllSpaces: includeAllSpacesOverride ?? preferences.showAllSpaces,
             excludedBundleIDs: Set(preferences.excludedBundleIDs)
         )
+        return options
     }
 
     private func mergeApplications(

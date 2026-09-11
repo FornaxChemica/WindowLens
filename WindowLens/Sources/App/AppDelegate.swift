@@ -1008,8 +1008,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func startWorkspaceWindowSession(showImmediately: Bool) {
+        // All-Spaces mode needs a fresh enum so CG-supplemented off-Space windows
+        // appear on the first Option+Tab frame (stale cache is often current-Space AX only).
+        let forceRefresh = AppState.shared.preferences.showAllSpaces
         var snapshot = hydratingWorkspaceSnapshot(
-            WindowCache.shared.getApplicationsForWorkspaceSwitching(forceRefresh: false)
+            WindowCache.shared.getApplicationsForWorkspaceSwitching(forceRefresh: forceRefresh)
         )
         let frontmost = frontmostApplicationForWorkspace()
         if let frontmost,
@@ -1453,8 +1456,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         flushPendingDockSelectionIfNeeded()
 
         let currentSelectedWindow = AppState.shared.selectedNativeWindowSelection()
+        let windowAdjusted = nativeWindowSelectionWasAdjusted
         let shouldApplySelectedWindow = applySelectedWindow
-            && (nativeWindowSelectionWasAdjusted || currentSelectedWindow?.window.isMinimized == true)
+            && (windowAdjusted || currentSelectedWindow?.window.isMinimized == true)
         let selectedWindow = shouldApplySelectedWindow ? currentSelectedWindow : nil
 
         isNativeCommandTabSessionActive = false
@@ -1470,17 +1474,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Hide first so reconcile work can't leave the preview on screen.
         panelManager.hide()
         eventTap?.setSwitcherVisible(false)
-        if applySelectedWindow {
+
+        // When ` selected a specific window, skip Dock reconcile — it re-activates the
+        // app's current-Space window (WindowLens) and races our Space hop.
+        if applySelectedWindow, !windowAdjusted {
             reconcileNativeCommandTabRelease()
         }
 
         if let selectedWindow {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
-                WindowSwitcher.shared.switchTo(
-                    window: selectedWindow.window,
-                    in: selectedWindow.app,
-                    windowIndex: selectedWindow.index
-                )
+            // Dock finishes Cmd-Tab activation slightly after key-up. One delayed
+            // apply is enough with sync CGS hops; a second pass beats a late Dock activate.
+            let delays: [TimeInterval] = windowAdjusted ? [0.28, 0.70] : [0.16]
+            for delay in delays {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    WindowSwitcher.shared.switchTo(
+                        window: selectedWindow.window,
+                        in: selectedWindow.app,
+                        windowIndex: selectedWindow.index
+                    )
+                }
             }
         }
     }
