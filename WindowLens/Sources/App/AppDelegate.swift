@@ -43,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
 
+        // Start Sparkle after AppKit is up (gentle reminders + scheduled checks).
+        _ = SoftwareUpdateController.shared
+
         setupEventTap()
         setupWorkspaceRecoveryObservers()
         setupWindowSlotObservers()

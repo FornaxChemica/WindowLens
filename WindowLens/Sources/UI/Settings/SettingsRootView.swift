@@ -47,11 +47,16 @@ final class SettingsNavigation: ObservableObject {
     func showPermissions() {
         selectedTab = .permissions
     }
+
+    func showAbout() {
+        selectedTab = .about
+    }
 }
 
 struct SettingsRootView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject private var navigation = SettingsNavigation.shared
+    @ObservedObject private var updates = SoftwareUpdateController.shared
 
     var body: some View {
         ZStack {
@@ -65,8 +70,20 @@ struct SettingsRootView: View {
             NavigationSplitView {
                 List(selection: $navigation.selectedTab) {
                     ForEach(SettingsTab.allCases) { tab in
-                        Label(tab.title, systemImage: tab.systemImage)
-                            .tag(tab)
+                        Label {
+                            HStack(spacing: 6) {
+                                Text(tab.title)
+                                if tab == .about, updates.updateAvailable {
+                                    Circle()
+                                        .fill(Color.orange)
+                                        .frame(width: 7, height: 7)
+                                        .accessibilityLabel("Update available")
+                                }
+                            }
+                        } icon: {
+                            Image(systemName: tab.systemImage)
+                        }
+                        .tag(tab)
                     }
                 }
                 .listStyle(.sidebar)

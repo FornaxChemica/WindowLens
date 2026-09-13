@@ -5,6 +5,7 @@ import SwiftUI
 struct WindowLensApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState.shared
+    @ObservedObject private var updates = SoftwareUpdateController.shared
 
     var body: some Scene {
         MenuBarExtra {
@@ -14,23 +15,45 @@ struct WindowLensApp: App {
             MenuBarIconLabel()
         }
         .menuBarExtraStyle(.window)
+        .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    updates.checkForUpdates()
+                }
+                .disabled(!updates.canCheckForUpdates)
+            }
+        }
     }
 }
 
 struct MenuBarIconLabel: View {
     @ObservedObject private var keepAwake = KeepAwakeManager.shared
     @ObservedObject private var appState = AppState.shared
+    @ObservedObject private var updates = SoftwareUpdateController.shared
 
     var body: some View {
-        if keepAwake.isActive, appState.preferences.modules.stayAwakeEnabled {
-            Image(systemName: menuSymbol)
-                .symbolRenderingMode(.monochrome)
-        } else if let icon = Self.templateMenuBarImage() {
-            Image(nsImage: icon)
-                .renderingMode(.template)
-        } else {
-            Image(systemName: "rectangle.on.rectangle")
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if keepAwake.isActive, appState.preferences.modules.stayAwakeEnabled {
+                    Image(systemName: menuSymbol)
+                        .symbolRenderingMode(.monochrome)
+                } else if let icon = Self.templateMenuBarImage() {
+                    Image(nsImage: icon)
+                        .renderingMode(.template)
+                } else {
+                    Image(systemName: "rectangle.on.rectangle")
+                }
+            }
+
+            if updates.updateAvailable {
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: 6, height: 6)
+                    .offset(x: 2, y: -1)
+                    .accessibilityHidden(true)
+            }
         }
+        .accessibilityLabel(updates.updateAvailable ? "WindowLens, update available" : "WindowLens")
     }
 
     private var menuSymbol: String {
@@ -58,11 +81,16 @@ struct MenuBarIconLabel: View {
 struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject private var visitHistory = WindowVisitHistory.shared
+    @ObservedObject private var updates = SoftwareUpdateController.shared
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
+
+            if let version = updates.availableUpdateVersion {
+                updateBanner(version: version)
+            }
 
             if appState.preferences.modules.stayAwakeEnabled {
                 StayAwakeControlsView(compact: true, showsChrome: true)
@@ -88,6 +116,27 @@ struct MenuBarView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 2)
+    }
+
+    private func updateBanner(version: String) -> some View {
+        MenuBarHoverButton {
+            updates.checkForUpdates()
+            dismiss()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Update available")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("WindowLens \(version)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+        }
     }
 
     @ViewBuilder
@@ -133,6 +182,10 @@ struct MenuBarView: View {
             }
             footerButton("Permissions", systemImage: "lock.shield") {
                 NotificationCenter.default.post(name: .openPermissions, object: nil)
+                dismiss()
+            }
+            footerButton("Check for Updates…", systemImage: "arrow.triangle.2.circlepath") {
+                updates.checkForUpdates()
                 dismiss()
             }
             footerButton("Reinstall Event Tap", systemImage: "keyboard") {

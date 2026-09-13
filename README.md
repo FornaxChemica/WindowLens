@@ -44,6 +44,19 @@ WindowLens targets **macOS 26 only by design** (Liquid Glass UI and current Swif
 
 Grant permissions in System Settings -> Privacy & Security.
 
+## Install (testers)
+
+Download the latest DMG from [Releases](https://github.com/FornaxChemica/WindowLens/releases).
+
+1. Open the DMG and drag **WindowLens** into **Applications**
+2. Open WindowLens from Applications
+3. If macOS says it can’t verify the developer:
+   - Open **System Settings → Privacy & Security**
+   - Find the WindowLens message and click **Open Anyway**
+   - Confirm **Open**
+
+Builds are **ad-hoc signed** (common for open-source Mac apps without a paid Apple Developer account). That avoids the worse “app is damaged” block; you still approve the app once. Notarized “double-click and go” builds need the paid Developer Program later.
+
 ## Build From Source
 
 ```bash
@@ -65,6 +78,14 @@ Skip the compile step when you only need a relaunch:
 ```
 
 You can still open `WindowLens.xcodeproj` in Xcode for debugging or tests (`Cmd+U`).
+
+## Shipping a release
+
+```bash
+./scripts/release.sh --version 1.0.0 --build 1
+```
+
+Default mode is ad-hoc (free). Details: [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Testing
 

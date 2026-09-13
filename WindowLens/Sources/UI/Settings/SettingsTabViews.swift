@@ -307,6 +307,8 @@ private struct WindowSlotSettingsRow: View {
 }
 
 struct AboutView: View {
+    @ObservedObject private var updates = SoftwareUpdateController.shared
+
     var body: some View {
         Form {
             Section {
@@ -321,7 +323,7 @@ struct AboutView: View {
                         .font(.title2)
                         .fontWeight(.semibold)
 
-                    Text("Version 1.0.0")
+                    Text("Version \(updates.currentVersionString)")
                         .foregroundStyle(.secondary)
 
                     Text("macOS window switching and native Cmd-Tab preview augmentation")
@@ -331,8 +333,90 @@ struct AboutView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
             }
+
+            if case .updateAvailable(let version) = updates.status {
+                Section {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Update available", systemImage: "arrow.down.circle.fill")
+                            .font(.headline)
+                            .foregroundStyle(.orange)
+                        Text("WindowLens \(version) is ready to install. Your settings and shortcuts are kept across updates.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        Button("Download Update…") {
+                            updates.checkForUpdates()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!updates.canCheckForUpdates)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            Section("Updates") {
+                statusRow
+
+                Toggle(
+                    "Automatically check for updates",
+                    isOn: Binding(
+                        get: { updates.automaticallyChecksForUpdates },
+                        set: { updates.setAutomaticallyChecksForUpdates($0) }
+                    )
+                )
+
+                Button("Check for Updates…") {
+                    updates.checkForUpdates()
+                }
+                .disabled(!updates.canCheckForUpdates)
+            }
         }
         .formStyle(.grouped)
         .navigationTitle("About")
+    }
+
+    private var statusRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: statusSymbol)
+                .foregroundStyle(statusColor)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(updates.status.title)
+                    .font(.body.weight(.medium))
+
+                if case .failed(let message) = updates.status {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                } else if let checked = updates.lastCheckedDescription {
+                    Text("Last checked \(checked)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var statusSymbol: String {
+        switch updates.status {
+        case .waitingForFirstCheck: return "clock"
+        case .checking: return "arrow.triangle.2.circlepath"
+        case .upToDate: return "checkmark.circle.fill"
+        case .updateAvailable: return "arrow.down.circle.fill"
+        case .failed: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        switch updates.status {
+        case .waitingForFirstCheck, .checking: return .secondary
+        case .upToDate: return .green
+        case .updateAvailable: return .orange
+        case .failed: return .orange
+        }
     }
 }

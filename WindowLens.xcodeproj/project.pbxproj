@@ -19,6 +19,8 @@
 		0930A02223CF1F9B042D557B /* WindowSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE4D926371366F489FFD85F1 /* WindowSwitcher.swift */; };
 		0A1B2C3D4E5F60718293A4B /* WindowVisitHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A3B4C /* WindowVisitHistory.swift */; };
 		0B1C2D3E4F5061728394A6B /* WindowUsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2D3E4F5061728394A5B7 /* WindowUsageStore.swift */; };
+		SU01B2C3D4E5F60718293A01 /* SoftwareUpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = SU01B2C3D4E5F60718293A00 /* SoftwareUpdateController.swift */; };
+		SU01B2C3D4E5F60718293A03 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = SU01B2C3D4E5F60718293A02 /* Sparkle */; };
 		0B1C2D3E4F5061728394A5B /* WindowHistoryHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3C4D5E6F708192A3B4C5D /* WindowHistoryHUD.swift */; };
 		0E4F5061728394A5B6C7D8E /* WindowSlotOutcome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E5F60718293A4B5C6D7E8F /* WindowSlotOutcome.swift */; };
 		0F5061728394A5B6C7D8E9F /* WindowSlotHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F60718293A4B5C6D7E8F90 /* WindowSlotHUD.swift */; };
@@ -96,6 +98,7 @@
 		3D4E5F60718293A4B5C6D7E /* WindowSlotBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSlotBadge.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F708192A3B4C /* WindowVisitHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowVisitHistory.swift; sourceTree = "<group>"; };
 		1C2D3E4F5061728394A5B7 /* WindowUsageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowUsageStore.swift; sourceTree = "<group>"; };
+		SU01B2C3D4E5F60718293A00 /* SoftwareUpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftwareUpdateController.swift; sourceTree = "<group>"; };
 		2B3C4D5E6F708192A3B4C5D /* WindowHistoryHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowHistoryHUD.swift; sourceTree = "<group>"; };
 		319162BA4FDF5C82AA38CAEA /* UserPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
 		3F30A3155D9DB846F43F2B34 /* GlassBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassBackground.swift; sourceTree = "<group>"; };
@@ -180,6 +183,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				SU01B2C3D4E5F60718293A03 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -193,6 +197,7 @@
 				FE4D926371366F489FFD85F1 /* WindowSwitcher.swift */,
 				1A2B3C4D5E6F708192A3B4C /* WindowVisitHistory.swift */,
 				1C2D3E4F5061728394A5B7 /* WindowUsageStore.swift */,
+				SU01B2C3D4E5F60718293A00 /* SoftwareUpdateController.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -443,6 +448,9 @@
 			dependencies = (
 			);
 			name = WindowLens;
+			packageProductDependencies = (
+				SU01B2C3D4E5F60718293A02 /* Sparkle */,
+			);
 			productName = WindowLens;
 			productReference = 44D5452060360EC52161C078 /* WindowLens.app */;
 			productType = "com.apple.product-type.application";
@@ -494,6 +502,9 @@
 				Base,
 			);
 			mainGroup = 518DA81DB9B99529C0C0AEBE;
+			packageReferences = (
+				SU01B2C3D4E5F60718293A04 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			productRefGroup = 2F3A6B1E78F896718625FF06 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -564,6 +575,7 @@
 				0930A02223CF1F9B042D557B /* WindowSwitcher.swift in Sources */,
 				0A1B2C3D4E5F60718293A4B /* WindowVisitHistory.swift in Sources */,
 				0B1C2D3E4F5061728394A6B /* WindowUsageStore.swift in Sources */,
+				SU01B2C3D4E5F60718293A01 /* SoftwareUpdateController.swift in Sources */,
 				0B1C2D3E4F5061728394A5B /* WindowHistoryHUD.swift in Sources */,
 				105061728394A5B6C7D8E9FA /* SettingsRootView.swift in Sources */,
 				1161728394A5B6C7D8E9FAB /* FeaturesSettingsView.swift in Sources */,
@@ -628,7 +640,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.chakshujain.windowlens;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -719,7 +731,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.chakshujain.windowlens;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -798,7 +810,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.chakshujain.windowlens.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -821,7 +833,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.chakshujain.windowlens.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -861,6 +873,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		SU01B2C3D4E5F60718293A04 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		SU01B2C3D4E5F60718293A02 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = SU01B2C3D4E5F60718293A04 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 46F86FAA6BBF9AC94A7E4595 /* Project object */;
 }

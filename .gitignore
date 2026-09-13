@@ -15,3 +15,9 @@ xcuserdata/
 # Packaged app artifacts
 *.app/
 *.zip
+dist/
+.tools/
+
+# Sparkle signing material (never commit the private key)
+.secrets/
+.tmp-sparkle/
