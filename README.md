@@ -57,6 +57,14 @@ Download the latest DMG from [Releases](https://github.com/FornaxChemica/WindowL
 
 Builds are **ad-hoc signed** (common for open-source Mac apps without a paid Apple Developer account). That avoids the worse “app is damaged” block; you still approve the app once. Notarized “double-click and go” builds need the paid Developer Program later.
 
+### Crashed?
+
+Crash reports stay on your Mac. To share one in a GitHub issue:
+
+1. Open **Settings → About**
+2. Click **Copy Latest Crash Report**
+3. Paste into the issue
+
 ## Build From Source
 
 ```bash

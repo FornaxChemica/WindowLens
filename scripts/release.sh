@@ -15,6 +15,7 @@
 #
 # Outputs (gitignored):
 #   dist/release/WindowLens-<version>.dmg
+#   dist/release/WindowLens-<version>.dSYM.zip
 #   dist/release/appcast.xml
 set -euo pipefail
 
@@ -48,7 +49,7 @@ NOTES_FILE=""
 
 usage() {
   cat <<EOF
-Build WindowLens release artifacts (DMG + Sparkle appcast).
+Build WindowLens release artifacts (DMG + dSYM zip + Sparkle appcast).
 
 Usage:
   ./scripts/release.sh --version X.Y.Z --build N [options]
@@ -163,6 +164,7 @@ build_adhoc_app() {
     -derivedDataPath "$DERIVED_DATA_PATH" \
     MARKETING_VERSION="$VERSION" \
     CURRENT_PROJECT_VERSION="$BUILD" \
+    DEBUG_INFORMATION_FORMAT=dwarf-with-dsym \
     ENABLE_HARDENED_RUNTIME=YES >&2
 
   local app="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/$APP_NAME.app"
@@ -204,6 +206,7 @@ build_developer_id_app() {
     -derivedDataPath "$DERIVED_DATA_PATH" \
     MARKETING_VERSION="$VERSION" \
     CURRENT_PROJECT_VERSION="$BUILD" \
+    DEBUG_INFORMATION_FORMAT=dwarf-with-dsym \
     CODE_SIGN_STYLE=Automatic \
     CODE_SIGN_IDENTITY="$identity" \
     DEVELOPMENT_TEAM="$TEAM_ID" \
@@ -265,6 +268,35 @@ make_dmg() {
   rm -rf "$stage"
 }
 
+package_dsym() {
+  local zip_path="$1"
+  log "Packaging dSYM $(basename "$zip_path")…"
+
+  local dsym=""
+  local candidates=(
+    "$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/$APP_NAME.app.dSYM"
+    "$ARCHIVE_PATH/dSYMs/$APP_NAME.app.dSYM"
+  )
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -d "$candidate" ]]; then
+      dsym="$candidate"
+      break
+    fi
+  done
+
+  if [[ -z "$dsym" ]]; then
+    dsym="$(find "$DERIVED_DATA_PATH" -type d -name "$APP_NAME.app.dSYM" 2>/dev/null | head -n 1 || true)"
+  fi
+  [[ -n "$dsym" && -d "$dsym" ]] || die "WindowLens.app.dSYM not found under $DERIVED_DATA_PATH (was DEBUG_INFORMATION_FORMAT set?)"
+
+  mkdir -p "$DIST_DIR"
+  rm -f "$zip_path"
+  /usr/bin/ditto -c -k --keepParent "$dsym" "$zip_path"
+  [[ -f "$zip_path" ]] || die "Failed to create $zip_path"
+  echo "dSYM zip: $zip_path" >&2
+}
+
 sign_dmg_developer_id() {
   local dmg_path="$1"
   local identity="$2"
@@ -320,10 +352,28 @@ generate_appcast() {
   [[ -f "$SPARKLE_PRIVATE_KEY" ]] || die "Missing Sparkle private key: $SPARKLE_PRIVATE_KEY"
   [[ -x "$SPARKLE_DIR/bin/generate_appcast" ]] || die "generate_appcast missing"
 
+  # Keep dSYM zips out of the folder Sparkle scans (DMGs only for appcast).
+  local stash
+  stash="$(mktemp -d /tmp/windowlens-dsym-stash.XXXXXX)"
+  shopt -s nullglob
+  local dsym_zips=( "$DIST_DIR"/*.dSYM.zip )
+  shopt -u nullglob
+  if ((${#dsym_zips[@]} > 0)); then
+    mv "${dsym_zips[@]}" "$stash/"
+  fi
+
   "$SPARKLE_DIR/bin/generate_appcast" \
     --ed-key-file "$SPARKLE_PRIVATE_KEY" \
     -o "$DIST_DIR/appcast.xml" \
     "$DIST_DIR" >&2
+
+  shopt -s nullglob
+  local stashed=( "$stash"/* )
+  shopt -u nullglob
+  if ((${#stashed[@]} > 0)); then
+    mv "${stashed[@]}" "$DIST_DIR/"
+  fi
+  rm -rf "$stash"
 
   [[ -f "$DIST_DIR/appcast.xml" ]] || die "appcast.xml was not created"
   rewrite_appcast_urls "$DIST_DIR/appcast.xml"
@@ -332,6 +382,7 @@ generate_appcast() {
 
 publish_github() {
   local dmg_path="$1"
+  local dsym_zip="$2"
   if [[ "$SKIP_GITHUB" == "1" ]]; then
     log "Skipping GitHub release (--skip-github)"
     return 0
@@ -361,12 +412,14 @@ EOF
     fi
   fi
 
+  [[ -f "$dsym_zip" ]] || die "Missing dSYM zip: $dsym_zip"
+
   log "Publishing GitHub release ${tag}…"
   if gh release view "$tag" --repo "$GITHUB_REPO" >/dev/null 2>&1; then
-    gh release upload "$tag" "$dmg_path" "$DIST_DIR/appcast.xml" \
+    gh release upload "$tag" "$dmg_path" "$DIST_DIR/appcast.xml" "$dsym_zip" \
       --repo "$GITHUB_REPO" --clobber >&2
   else
-    gh release create "$tag" "$dmg_path" "$DIST_DIR/appcast.xml" \
+    gh release create "$tag" "$dmg_path" "$DIST_DIR/appcast.xml" "$dsym_zip" \
       --repo "$GITHUB_REPO" \
       --title "$title" \
       "${notes_args[@]}" >&2
@@ -406,12 +459,15 @@ else
   notarize_and_staple "$DMG_PATH"
 fi
 
+DSYM_ZIP="$DIST_DIR/$APP_NAME-$VERSION.dSYM.zip"
+package_dsym "$DSYM_ZIP"
 generate_appcast
-publish_github "$DMG_PATH"
+publish_github "$DMG_PATH" "$DSYM_ZIP"
 
 log "Done"
 echo "Mode:    $MODE"
 echo "DMG:     $DMG_PATH"
+echo "dSYM:    $DSYM_ZIP"
 echo "Appcast: $DIST_DIR/appcast.xml"
 echo
 if [[ "$MODE" == "adhoc" ]]; then

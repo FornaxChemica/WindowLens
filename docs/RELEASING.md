@@ -24,13 +24,24 @@ Most early open-source Mac apps ship ad-hoc. The important trick: **properly ad-
 
 This:
 
-1. Builds Release  
+1. Builds Release with `DEBUG_INFORMATION_FORMAT=dwarf-with-dsym`  
 2. Ad-hoc signs with `scripts/adhoc.entitlements` (includes `disable-library-validation` so Sparkle loads)  
 3. Creates `dist/release/WindowLens-<version>.dmg`  
-4. Generates Sparkle-signed `appcast.xml`  
-5. Uploads a GitHub Release (`v<version>`) with DMG + appcast  
+4. Zips `WindowLens.app.dSYM` → `dist/release/WindowLens-<version>.dSYM.zip`  
+5. Generates Sparkle-signed `appcast.xml` from **DMGs only** (dSYM zips are stashed aside during `generate_appcast`)  
+6. Uploads a GitHub Release (`v<version>`) with **DMG + appcast + dSYM.zip**  
 
 Flags: `--skip-github`, `--skip-version-write`, `--notes FILE`.
+
+Keep prior version DMGs in `dist/release/` when generating a new appcast so older Sparkle items remain listed (e.g. keep `WindowLens-1.0.0.dmg` when shipping 1.0.1).
+
+### Artifacts
+
+| File | Purpose |
+| --- | --- |
+| `WindowLens-<version>.dmg` | Installer / Sparkle update payload |
+| `appcast.xml` | Sparkle feed (DMG enclosures only) |
+| `WindowLens-<version>.dSYM.zip` | Symbols for crash symbolication — **not** in the appcast |
 
 ## What testers do
 

@@ -308,6 +308,9 @@ private struct WindowSlotSettingsRow: View {
 
 struct AboutView: View {
     @ObservedObject private var updates = SoftwareUpdateController.shared
+    @State private var crashSummary: String?
+    @State private var copyConfirmation: String?
+    @State private var copyError: String?
 
     var body: some View {
         Form {
@@ -369,9 +372,64 @@ struct AboutView: View {
                 }
                 .disabled(!updates.canCheckForUpdates)
             }
+
+            Section {
+                Text(crashSummary.map { "Latest: \($0)" } ?? "No crash reports found")
+                    .foregroundStyle(.secondary)
+
+                Button("Copy Latest Crash Report") {
+                    copyLatestCrashReport()
+                }
+                .disabled(crashSummary == nil)
+
+                if let copyConfirmation {
+                    Text(copyConfirmation)
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
+
+                if let copyError {
+                    Text(copyError)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+
+                Button("Show in Finder") {
+                    CrashReportStore.revealLatestInFinder()
+                }
+            } header: {
+                Text("Diagnostics")
+            } footer: {
+                Text("Reports stay on this Mac until you share them.")
+            }
         }
         .formStyle(.grouped)
         .navigationTitle("About")
+        .onAppear {
+            refreshCrashSummary()
+        }
+    }
+
+    private func refreshCrashSummary() {
+        crashSummary = CrashReportStore.latestReportSummary()
+    }
+
+    private func copyLatestCrashReport() {
+        copyConfirmation = nil
+        copyError = nil
+        do {
+            try CrashReportStore.copyLatestReportToPasteboard()
+            copyConfirmation = "Copied"
+            refreshCrashSummary()
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                if copyConfirmation == "Copied" {
+                    copyConfirmation = nil
+                }
+            }
+        } catch {
+            copyError = error.localizedDescription
+        }
     }
 
     private var statusRow: some View {
